@@ -5,38 +5,17 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Norm.BSON;
 using Norm.Collections;
+using System.Collections;
+using Norm.Configuration;
 
 namespace Norm.Linq
 {
     /// <summary>
     /// The mongo query provider.
     /// </summary>
-    public class MongoQueryProvider : IQueryProvider
+    public class MongoQueryProvider : IQueryProvider, IDisposable
     {
         private readonly Mongo _server;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MongoQueryProvider"/> class.
-        /// </summary>
-        /// <param name="dbName">
-        /// The db name.
-        /// </param>
-        public MongoQueryProvider(string dbName)
-            : this(dbName, "127.0.0.1", "27017", string.Empty)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MongoQueryProvider"/> class.
-        /// </summary>
-        /// <param name="dbName">The db name.</param>
-        /// <param name="server">The server.</param>
-        /// <param name="port">The port.</param>
-        /// <param name="options">The options.</param>
-        public MongoQueryProvider(string dbName, string server, string port, string options)
-            : this(new Mongo(dbName, server, port, options))
-        {
-        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoQueryProvider"/> class.
@@ -47,6 +26,11 @@ namespace Norm.Linq
         public MongoQueryProvider(Mongo server)
         {
             _server = server;
+        }
+
+        public static MongoQueryProvider Create(String connectionString)
+        {
+            return new MongoQueryProvider(Mongo.Create(connectionString));
         }
 
         /// <summary>
@@ -104,39 +88,11 @@ namespace Norm.Linq
         /// </summary>
         /// <typeparam name="S">Type to execute</typeparam>
         /// <param name="expression">The expression.</param>
-        /// <returns></returns>
+        /// <returns>Resulting object</returns>
         S IQueryProvider.Execute<S>(Expression expression)
         {
-            // This duplication of code sucks - I'll refactor it out 
-            // but right now the type conversion is SUCK
-
-            var m = (MethodCallExpression)expression;
-            if (m.Method.Name.StartsWith("First") || m.Method.Name.StartsWith("Single"))
-            {
-                var collection = DB.GetCollection<S>();
-                var tranny = new MongoQueryTranslator();
-                var qry = tranny.Translate(expression);
-                var fly = tranny.FlyWeight;
-
-                if (!string.IsNullOrEmpty(qry))
-                {
-                    if (tranny.IsComplex)
-                    {
-                        fly = new Flyweight();
-                        if (qry.StartsWith("function")) {
-                            fly["$where"] = qry;
-                        } else {
-                            fly["$where"] = " function(){return " + qry + "; }";
-                        }
-                    }
-                }
-
-                return collection.FindOne(fly);
-            }
-           
-            var result = Execute(expression);
-            var converted = (S)Convert.ChangeType(result, typeof(S));
-            return converted;
+            object result = ExecuteQuery<S>(expression);
+            return (S)Convert.ChangeType(result, typeof(S));
         }
 
         /// <summary>
@@ -150,170 +106,131 @@ namespace Norm.Linq
         }
 
         /// <summary>
-        /// The execute.
-        /// </summary>
-        /// <typeparam name="T">Type to execute</typeparam>
-        /// <param name="expression">The expression.</param>
-        /// <returns></returns>
-        public IEnumerable<T> Execute<T>(Expression expression)
-        {
-            // create the collection
-            var collection = DB.GetCollection<T>();
-            expression = PartialEvaluator.Eval(expression);
-
-            // pass off the to the translator, which will set the query stuff
-            var tranny = new MongoQueryTranslator();
-            var qry = tranny.Translate(expression);
-            var fly = tranny.FlyWeight;
-
-
-            // execute
-            if (!string.IsNullOrEmpty(qry) || tranny.IsComplex)
-            {
-                if (tranny.IsComplex)
-                {
-                    // reset - need to use the where statement generated
-                    // instead of the props set on the internal flyweight
-                    fly = new Flyweight();
-                    if(qry.StartsWith("function")){
-                        fly["$where"] = qry;
-                    }else{
-                        fly["$where"] = " function(){return " + qry + "; }";
-                    }
-                }
-            }
-
-            IEnumerable<T> result;
-            if (tranny.SortFly.AllProperties().Count()>0) {
-                tranny.SortFly.ReverseKitchen();
-                result = collection.Find(fly, tranny.SortFly, tranny.Take, tranny.Skip, collection.FullyQualifiedName);
-            } else {
-                result = collection.Find(fly, tranny.Take, tranny.Skip);
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Avert your eyes all who come here seeking enlightenment. You cannot behold the true
-        /// joy and intense power of the treasure lying inside the mess. So I beseech you - turn
-        /// back now if you are queasy, squeemish, or otherwise feel entitled to code that not
-        /// only does what you need, but looks pretty doing it.
-        /// I'll clean this up as I have time. For now, it's vomitous.
         /// </summary>
         /// <param name="expression">An expression tree that represents a LINQ query.</param>
         /// <returns>The execute.</returns>
-        public object Execute(Expression expression)
+        public object ExecuteQuery<T>(Expression expression)
         {
-            // this is called from things OTHER than Enumerable() - like ToList() etc
-            // create the collection
-            var tranny = new MongoQueryTranslator();
+            expression = PartialEvaluator.Eval(expression, this.CanBeEvaluatedLocally);
 
-            // need to know what method was called here. This corresponds to functions 
-            // like "Sum, Join," etc. It's the last thing in the method chain
-            // Where gets sent to the Enumeration method, as does Select etc.
-            // pull out the MethodCallExpression
-            var m = expression as MethodCallExpression;
+            var translator = new MongoQueryTranslator();
+            var qry = translator.Translate(expression);
+            var fly = translator.FlyWeight;
 
-            // The query itself is the first arg of the main expression. This is what we need to eval.
-            var qry = tranny.Translate(m.Arguments[0]);
-            var fly = tranny.FlyWeight;
+            // This is the actual Query mechanism...            
+            var collection = new MongoCollection<T>(translator.CollectionName, DB, DB.CurrentConnection);
 
-            // set the method call to the Method name. Yeehaa.
-            tranny.MethodCall = m.Method.Name;
-
-            // if it's here, we need it - the last arg is the lambda passed in as an argument to the method
-            // this will give us the prop name for our mapreduce action
-            if (m.Arguments.Count > 1)
+            string map = "", reduce = "", finalize = "";
+            if (!string.IsNullOrEmpty(translator.AggregatePropName))
             {
-                if (tranny.MethodCall == "Any")
+                map = "function(){emit(0, {val: this." + translator.AggregatePropName + ",tSize:1} )};";
+                if (!string.IsNullOrEmpty(qry))
                 {
-                    // any has a boolean lambda as a body - translate this 
-                    // as normal
-                    qry = tranny.Translate(m.Arguments[1]);
-                    // the property name doesn't matter with Any
+                    map = "function(){if (" + qry + ") {emit(0, {val: this." + translator.AggregatePropName + ",tSize:1} )};}";
                 }
-                else
-                {
-                    tranny.PropName = tranny.Translate(m.Arguments[1]);
-                }
-            }
-            else
-            {
-                // it's a straight query call - grab from first
-                tranny.PropName = tranny.Translate(m.Arguments[0]);
+
+                finalize = "function(key, res){ return res.val; }";
             }
 
-            // the type we're dealing with is a ConstantExpression, hanging off the 
-            // first argument. Need to set it so our little fly guy
-            // knows what collection to use
-            tranny.TypeName = tranny.TranslateCollectionName(m.Arguments[0]);
-
-
-            // This is the actual Query mechanism...
-            var collection = new MongoCollection(tranny.TypeName, DB, DB.CurrentConnection);
-
-            // if a query comes back, create a $where. We'll use this for Count() 
-            // and Group in the future.
-            if (!string.IsNullOrEmpty(qry))
+            switch (translator.MethodCall)
             {
-                if (tranny.IsComplex)
-                {
-                    fly = new Flyweight();
-                    fly["$where"] = " function(){return " + qry + "; }";
-                }
+                case "SingleOrDefault":
+                case "FirstOrDefault":
+                case "Single":
+                case "First":
+                    translator.Take = 1;
+                    break;
             }
 
-            // This is the mapping function (javascript. Yummy).
-            // It defines our collection that we'll iterate (reduce) over
-            // James, you're an animal.
-            var averyMap = "function(){emit(0, {val: " + tranny.PropName + ",tSize:1} )};";
-
-            // if they pass in a query (Where()), we need to graft that on
-            // to our Mapping. You can thank Avery for this one.
-            if (!string.IsNullOrEmpty(qry))
+            object result;
+            switch (translator.MethodCall)
             {
-                averyMap = "function(){if" + qry + "{emit(0, {val: " + tranny.PropName + ",tSize:1} )};}";
-            }
-
-            var reduce = string.Empty;
-            var finalize = "function(key, res){ return res.val; }";
-            object result = null;
-
-            // Whachoo SAY!
-            switch (tranny.MethodCall)
-            {
-                // I'm Just ASKIN!!!
                 case "Any":
-                    result = collection.Count(tranny.FlyWeight) > 0;
+                    result = collection.Count(fly) > 0;
                     break;
                 case "Count":
                     result = collection.Count(fly);
                     break;
                 case "Sum":
-                    reduce = "function(key, values){var sum = 0; for(var i = 0; i < values.length; ++i){ sum+=values[i].val;} return {val:sum};}";
-                    result = ExecuteMR<float>(tranny.TypeName, averyMap, reduce, finalize);
+                    reduce = "function(key, values){var sum = 0; for(var i = 0; i < values.length; i++){ sum+=values[i].val;} return {val:sum};}";
+                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
                     break;
                 case "Average":
-                    reduce = "function(key, values){var sum = 0, tot = 0; for(var i = 0; i < values.length; ++i){sum += values[i].val; tot += values[i].tSize; } return {val:sum,tSize:tot};}";
+                    reduce = "function(key, values){var sum = 0, tot = 0; for(var i = 0; i < values.length; i++){sum += values[i].val; tot += values[i].tSize; } return {val:sum,tSize:tot};}";
                     finalize = "function(key, res){ return res.val / res.tSize; }";
-                    result = ExecuteMR<float>(tranny.TypeName, averyMap, reduce, finalize);
+                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
                     break;
                 case "Min":
-                    reduce =
-                        "function(key, values){var least = 0; for(var i = 0; i < values.length; ++i){if(i==0 || least > values[i].val){least=values[i].val;}} return {val:least};}";
-                    result = ExecuteMR<float>(tranny.TypeName, averyMap, reduce, finalize);
+                    reduce = "function(key, values){var least = 0; for(var i = 0; i < values.length; i++){if(i==0 || least > values[i].val){least=values[i].val;}} return {val:least};}";
+                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
                     break;
                 case "Max":
-                    reduce =
-                        "function(key, values){var least = 0; for(var i = 0; i < values.length; ++i){if(i==0 || least < values[i].val){least=values[i].val;}} return {val:least};}";
-                    result = ExecuteMR<float>(tranny.TypeName, averyMap, reduce, finalize);
+                    reduce = "function(key, values){var least = 0; for(var i = 0; i < values.length; i++){if(i==0 || least < values[i].val){least=values[i].val;}} return {val:least};}";
+                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
                     break;
                 default:
+                    if (translator.SortFly.AllProperties().Count() > 0)
+                    {
+                        translator.SortFly.ReverseKitchen();
+                        result = collection.Find(fly, translator.SortFly, translator.Take, translator.Skip, collection.FullyQualifiedName);
+                    }
+                    else
+                    {
+                        result = collection.Find(fly, translator.Take, translator.Skip);
+                    }
+
+                    switch (translator.MethodCall)
+                    {
+                        case "SingleOrDefault": result = ((IEnumerable<T>)result).SingleOrDefault(); break;
+                        case "FirstOrDefault": result = ((IEnumerable<T>)result).FirstOrDefault(); break;
+                        case "Single": result = ((IEnumerable<T>)result).Single(); break;
+                        case "First": result = ((IEnumerable<T>)result).First(); break;
+                    }
+
                     break;
             }
 
             return result;
+        }
+
+        public object Execute(Expression expression)
+        {
+            var elementType = LinqTypeHelper.GetElementType(expression.Type);
+            try
+            {
+                return typeof(MongoQueryProvider)
+                    .GetMethod("ExecuteQuery")
+                    .MakeGenericMethod(elementType)
+                    .Invoke(this, new object[] { expression });
+            }
+            catch (TargetInvocationException tie)
+            {
+                throw tie.InnerException;
+            }
+        }
+
+        private bool CanBeEvaluatedLocally(Expression expression)
+        {
+            // any operation on a query can't be done locally
+            ConstantExpression cex = expression as ConstantExpression;
+            if (cex != null)
+            {
+                IQueryable query = cex.Value as IQueryable;
+                if (query != null && query.Provider == this)
+                    return false;
+            }
+            MethodCallExpression mc = expression as MethodCallExpression;
+            if (mc != null &&
+                (mc.Method.DeclaringType == typeof(Enumerable) ||
+                 mc.Method.DeclaringType == typeof(Queryable)))
+            {
+                return false;
+            }
+            if (expression.NodeType == ExpressionType.Convert &&
+                expression.Type == typeof(object))
+                return true;
+            return expression.NodeType != ExpressionType.Parameter &&
+                   expression.NodeType != ExpressionType.Lambda;
         }
 
         /// <summary>
@@ -339,6 +256,11 @@ namespace Norm.Linq
         private T ExecuteMR<T>(string typeName, string map, string reduce)
         {
             return ExecuteMR<T>(typeName, map, reduce, null);
+        }
+        
+        public void Dispose()
+        {
+            _server.Dispose();
         }
     }
 }

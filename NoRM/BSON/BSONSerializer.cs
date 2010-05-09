@@ -15,23 +15,18 @@ namespace Norm.BSON
     internal class BsonSerializer
     {
         private static readonly IDictionary<Type, BSONTypes> _typeMap = new Dictionary<Type, BSONTypes>
-                                                                            {
-                                                                                {typeof (int), BSONTypes.Int32},
-                                                                                {typeof (long), BSONTypes.Int64},
-                                                                                {typeof (bool), BSONTypes.Boolean},
-                                                                                {typeof (string), BSONTypes.String},
-                                                                                {typeof (double), BSONTypes.Double},
-                                                                                {typeof (Guid), BSONTypes.Binary},
-                                                                                {typeof (Regex), BSONTypes.Regex},
-                                                                                {typeof (DateTime), BSONTypes.DateTime},
-                                                                                {typeof (float), BSONTypes.Double},
-                                                                                {typeof (byte[]), BSONTypes.Binary},
-                                                                                {typeof (ObjectId), BSONTypes.MongoOID},
-                                                                                {
-                                                                                    typeof (ScopedCode),
-                                                                                    BSONTypes.ScopedCode
-                                                                                    }
-                                                                            };
+               {
+                {typeof (int), BSONTypes.Int32},
+                {typeof (long), BSONTypes.Int64},
+                {typeof (bool), BSONTypes.Boolean},
+                {typeof (string), BSONTypes.String},{typeof (double), BSONTypes.Double},
+                {typeof (Guid), BSONTypes.Binary},{typeof (Regex), BSONTypes.Regex},
+                {typeof (DateTime), BSONTypes.DateTime},
+                {typeof (float), BSONTypes.Double},
+                {typeof (byte[]), BSONTypes.Binary},
+                {typeof (ObjectId), BSONTypes.MongoOID},
+                {typeof (ScopedCode),BSONTypes.ScopedCode}
+               };
 
         private readonly BinaryWriter _writer;
         private Document _current;
@@ -112,9 +107,13 @@ namespace Norm.BSON
         private void WriteDocument(object document)
         {
             NewDocument();
-            if (document is Flyweight)
+            if (document is Expando)
             {
-                WriteFlyweight((Flyweight)document);
+                WriteFlyweight((Expando)document);
+            }
+            else if (document is FieldSelectionList)
+            {
+                WriteFieldListSelection((FieldSelectionList)document);
             }
             else
             {
@@ -124,11 +123,19 @@ namespace Norm.BSON
             EndDocument(true);
         }
 
+        private void WriteFieldListSelection(FieldSelectionList fields)
+        {
+            foreach (var field in fields)
+            {
+                Write(field, 1);
+            }
+        }
+
         /// <summary>
         /// Writes a Flyweight.
         /// </summary>
         /// <param name="document">The document.</param>
-        private void WriteFlyweight(Flyweight document)
+        private void WriteFlyweight(Expando document)
         {
             foreach (var property in document.AllProperties())
             {
@@ -145,8 +152,8 @@ namespace Norm.BSON
         {
             return type.IsGenericType &&
                    (
-                    type.GetGenericTypeDefinition() == typeof (DbReference<>) ||
-                    type.GetGenericTypeDefinition() == typeof (DbReference<,>)
+                    type.GetGenericTypeDefinition() == typeof(DbReference<>) ||
+                    type.GetGenericTypeDefinition() == typeof(DbReference<,>)
                    );
         }
 
@@ -171,17 +178,17 @@ namespace Norm.BSON
                 var name = property == idProperty && !IsDbReference(property.DeclaringType)
                                ? "_id"
                                : MongoConfiguration.GetPropertyAlias(documentType, property.Name);
-
-                var value = property.Getter(document);
-                if (value == null && property.IgnoreIfNull)
+                object value;
+                if (property.IgnoreProperty(document, out value))
                 {
+                    // ignore the member
                     continue;
                 }
-
+                // serialize the member
                 SerializeMember(name, value);
             }
 
-            var fly = document as IFlyweight;
+            var fly = document as IExpando;
             if (fly != null)
             {
                 foreach (var f in fly.AllProperties())
@@ -252,10 +259,11 @@ namespace Norm.BSON
                     return;
                 case BSONTypes.DateTime:
                     Written(8);
-                    _writer.Write((long)((DateTime)value).Subtract(BsonHelper.EPOCH).TotalMilliseconds);
+                    _writer.Write((long)((DateTime)value).ToUniversalTime()
+                        .Subtract(BsonHelper.EPOCH).TotalMilliseconds);
                     return;
                 case BSONTypes.Binary:
-                    WriteBinnary(value);
+                    WriteBinary(value);
                     return;
                 case BSONTypes.ScopedCode:
                     Write((ScopedCode)value);
@@ -354,7 +362,7 @@ namespace Norm.BSON
         /// <param name="value">
         /// The value.
         /// </param>
-        private void WriteBinnary(object value)
+        private void WriteBinary(object value)
         {
             if (value is byte[])
             {

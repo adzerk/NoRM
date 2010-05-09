@@ -4,6 +4,7 @@ using Norm.Protocol.SystemMessages;
 using Norm.Protocol.SystemMessages.Request;
 using Norm.Responses;
 using Norm.Collections;
+using System;
 
 namespace Norm
 {
@@ -63,7 +64,7 @@ namespace Norm
             return new MongoCollection<T>(collectionName, this, this._connection);
         }
 
-        /// <summary>
+         /// <summary>
         /// Gets a collection.
         /// </summary>
         /// <typeparam name="T">Collection type</typeparam>
@@ -117,7 +118,7 @@ namespace Norm
         {
             try
             {
-                return GetCollection<DroppedCollectionResponse>("$cmd").FindOne(new { drop = collectionName }).OK == 1;
+                return GetCollection<DroppedCollectionResponse>("$cmd").FindOne(new { drop = collectionName }).WasSuccessful;
             }
             catch (MongoException exception)
             {
@@ -139,7 +140,7 @@ namespace Norm
         {
             try
             {
-                return GetCollection<GenericCommandResponse>("$cmd").FindOne(new CreateCollectionRequest(options)).Ok == 1;
+                return GetCollection<GenericCommandResponse>("$cmd").FindOne(new CreateCollectionRequest(options)).WasSuccessful;
             }
             catch (MongoException exception)
             {

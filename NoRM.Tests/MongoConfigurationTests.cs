@@ -13,10 +13,11 @@ namespace Norm.Tests
         {
             MongoConfiguration.RemoveMapFor<User2>();
             MongoConfiguration.RemoveMapFor<User>();
-            MongoConfiguration.RemoveMapFor<Product>();
+            MongoConfiguration.RemoveMapFor<TestProduct>();
             MongoConfiguration.RemoveMapFor<Shopper>();
             MongoConfiguration.RemoveMapFor<Cart>();
-            MongoConfiguration.RemoveMapFor<Product>();
+            MongoConfiguration.RemoveMapFor<TestProduct>();
+            MongoConfiguration.RemoveMapFor<ProductSummary>();
 
             using (var admin = new MongoAdmin(TestHelper.ConnectionString()))
             {
@@ -42,7 +43,7 @@ namespace Norm.Tests
 
             //the mapping should cause the typehelper cache to be rebuilt with the new properties.
             MongoConfiguration.Initialize(cfg => cfg.For<User2>(j => j.ForProperty(k => k.LastName).UseAlias("LNAME")));
-            
+
             typeHelper = TypeHelper.GetHelperForType(typeof(User2));
             Assert.Equal("LastName", typeHelper.FindProperty("LNAME").Name);
         }
@@ -123,7 +124,7 @@ namespace Norm.Tests
         {
             MongoConfiguration.Initialize(r => r.For<User>(u => u.ForProperty(user => user.FirstName).UseAlias("thisIsntDying")));
 
-            var connection = MongoConfiguration.GetConnectionString(typeof(Product));
+            var connection = MongoConfiguration.GetConnectionString(typeof(TestProduct));
 
             Assert.Equal(null, connection);
         }
@@ -131,9 +132,9 @@ namespace Norm.Tests
         [Fact]
         public void Mongo_Configuration_With_Linq_Supports_Aliases()
         {
-            
+
             MongoConfiguration.Initialize(c => c.AddMap<ShopperMap>());
-            using (var shoppers = new Shoppers(new MongoQueryProvider("test", "localhost", "27017", "")))
+            using (var shoppers = new Shoppers(MongoQueryProvider.Create("mongodb://localhost:27017/test")))
             {
                 shoppers.Drop<Shopper>();
                 shoppers.Add(new Shopper
@@ -144,7 +145,7 @@ namespace Norm.Tests
                     {
                         Id = ObjectId.NewObjectId(),
                         Name = "Cart1",
-                        Product = new Product { Name = "SomeProduct" }
+                        Product = new TestProduct { Name = "SomeProduct" }
                     }
                 });
 
@@ -156,7 +157,7 @@ namespace Norm.Tests
                     {
                         Id = ObjectId.NewObjectId(),
                         Name = "Cart2",
-                        Product = new Product { Name = "OtherProduct" }
+                        Product = new TestProduct { Name = "OtherProduct" }
                     }
                 });
 
@@ -175,7 +176,7 @@ namespace Norm.Tests
         public void Are_Queries_Fully_Linqified()
         {
             MongoConfiguration.Initialize(c => c.AddMap<ShopperMap>());
-            using (var shoppers = new Shoppers(new MongoQueryProvider("test", "localhost", "27017", "")))
+            using (var shoppers = new Shoppers(MongoQueryProvider.Create("mongodb://localhost:27017/test")))
             {
                 shoppers.Drop<Shopper>();
                 shoppers.Add(new Shopper
@@ -202,9 +203,10 @@ namespace Norm.Tests
                     }
                 });
 
-                // Dies a miserable death when the translator splits this query by "." leaving
-                // no way to deal with an argument called "First()"
-                var tooDeep = shoppers.Where(x => x.Cart.CartSuppliers.First().Name == "Supplier1").ToList();
+                var deepQuery = shoppers.Where(x => x.Cart.CartSuppliers.First().Name == "Supplier1").ToList();
+                Assert.Equal("John", deepQuery[0].Name);
+                Assert.Equal("Cart1", deepQuery[0].Cart.Name);
+                Assert.Equal(1, deepQuery.Count);
             }
         }
 
@@ -227,7 +229,7 @@ namespace Norm.Tests
         [Fact]
         public void Can_correctly_determine_collection_name_when_discriminator_is_on_an_interface()
         {
-			var collectionName = MongoConfiguration.GetCollectionName(typeof(InterfaceDiscriminatedClass));
+            var collectionName = MongoConfiguration.GetCollectionName(typeof(InterfaceDiscriminatedClass));
 
             Assert.Equal("IDiscriminated", collectionName);
         }
@@ -249,8 +251,8 @@ namespace Norm.Tests
                 var obj1 = new SubClassedObjectFluentMapped { Title = "Prod1", ABool = true };
                 var obj2 = new SubClassedObjectFluentMapped { Title = "Prod2", ABool = false };
 
-                mongo.GetCollection<SubClassedObjectFluentMapped>("Fake").Save(obj1);
-                mongo.GetCollection<SubClassedObjectFluentMapped>("Fake").Save(obj2);
+                mongo.GetCollection<SubClassedObjectFluentMapped>("Fake").Insert(obj1);
+                mongo.GetCollection<SubClassedObjectFluentMapped>("Fake").Insert(obj2);
                 var found = mongo.GetCollection<SuperClassObjectFluentMapped>("Fake").Find();
 
                 Assert.Equal(2, found.Count());
@@ -268,7 +270,7 @@ namespace Norm.Tests
             using (var mongo = Mongo.Create(TestHelper.ConnectionString()))
             {
                 var obj1 = new SubClassedObjectFluentMapped { Title = "Prod1", ABool = true };
-                mongo.GetCollection<SubClassedObjectFluentMapped>("Fake").Save(obj1);
+                mongo.GetCollection<SubClassedObjectFluentMapped>("Fake").Insert(obj1);
                 var found = mongo.GetCollection<SuperClassObjectFluentMapped>("Fake").Find();
 
                 Assert.Equal(1, found.Count());
@@ -276,182 +278,21 @@ namespace Norm.Tests
             }
         }
 
-        #region Test classes
-
-        internal class Shoppers : MongoQuery<Shopper>, IDisposable
+        [Fact]
+        public void MarksAClassAsASummary()
         {
-            private readonly MongoQueryProvider _provider;
-
-            public Shoppers(MongoQueryProvider provider)
-                : base(provider)
+            MongoConfiguration.Initialize(m => m.For<ProductSummary>(p => p.SummaryOf<TestProduct>()));
+            using (var mongo = Mongo.Create(TestHelper.ConnectionString()))
             {
-                _provider = provider;
-            }
+                mongo.GetCollection<TestProduct>().Insert(new TestProduct { UniqueID = Guid.NewGuid(), Available = DateTime.Now, Name = "Soap", Price = 2, Supplier = new Supplier { Name = "A Supplier" } });
+                mongo.GetCollection<TestProduct>().Insert(new TestProduct { UniqueID = Guid.NewGuid(), Available = DateTime.Now, Name = "Rope", Price = 1, Supplier = new Supplier { Name = "A Supplier" } });
+                mongo.GetCollection<TestProduct>().Insert(new TestProduct { UniqueID = Guid.NewGuid(), Available = DateTime.Now, Name = "Fun", Price = 0, Supplier = new Supplier { Name = "A Supplier" } });
 
-            public MongoQueryProvider Provider
-            {
-                get
-                {
-                    return _provider;
-                }
-            }
-
-            public T MapReduce<T>(string map, string reduce)
-            {
-                var result = default(T);
-                var mr = _provider.Server.CreateMapReduce();
-
-                var response = mr.Execute(new MapReduceOptions(typeof (T).Name) {Map = map, Reduce = reduce});
-                var coll = response.GetCollection<MapReduceResult<T>>();
-                var r = coll.Find().FirstOrDefault();
-                result = r.Value;
-
-                return result;
-            }
-
-            public void Add<T>(T item) where T : class, new()
-            {
-                _provider.DB.GetCollection<T>().Insert(item);
-            }
-
-            public void Update<T>(T item) where T : class, new()
-            {
-                _provider.DB.GetCollection<T>().UpdateOne(item, item);
-            }
-
-            public void Drop<T>()
-            {
-                _provider.DB.DropCollection(MongoConfiguration.GetCollectionName(typeof(T)));
-            }
-
-            #region IDisposable Members
-
-            public void Dispose()
-            {
-                _provider.Server.Dispose();
-            }
-
-            #endregion
-        }
-
-        internal class Shopper
-        {
-            public Shopper()
-            {
-                Id = ObjectId.NewObjectId();
-            }
-
-            public ObjectId Id { get; set; }
-            public string Name { get; set; }
-            public Cart Cart { get; set; }
-        }
-
-        internal class Cart
-        {
-            public Cart()
-            {
-                Id = ObjectId.NewObjectId();
-            }
-            public string Name { get; set; }
-            public ObjectId Id { get; set; }
-            public Product Product { get; set; }
-            public Supplier[] CartSuppliers { get; set; }
-        }
-
-        internal class User
-        {
-            public User()
-            {
-                Id = ObjectId.NewObjectId();
-            }
-            public ObjectId Id { get; set; }
-            public string FirstName { get; set; }
-            public string LastName { get; set; }
-        }
-
-        internal class User2
-        {
-            public User2()
-            {
-                Id = ObjectId.NewObjectId();
-            }
-            public ObjectId Id { get; set; }
-            public string FirstName { get; set; }
-            public string LastName { get; set; }
-        }
-
-        public class ShopperMap : MongoConfigurationMap
-        {
-            public ShopperMap()
-            {
-                For<Shopper>(config =>
-                {
-                    config.UseCollectionNamed("MyProducts");
-                    config.ForProperty(u => u.Name).UseAlias("shopperName");
-                    config.ForProperty(u => u.Cart).UseAlias("MyCart");
-                });
-
-                For<Cart>(c =>
-                {
-                    c.UseCollectionNamed("ListOfCarts");
-                    c.ForProperty(cart => cart.Product).UseAlias("ProductsGoHere");
-                    c.ForProperty(ca => ca.Name).UseAlias("ThisCartName");
-                });
-
-                For<Product>(c => c.ForProperty(p => p.Price).UseAlias("DiscountPrice"));
+                var found = mongo.GetCollection<ProductSummary>().Find();
+                Assert.Equal(3, found.Count());
+                Assert.Equal("Soap", found.ElementAt(0).Name);
+                Assert.Equal(2, found.ElementAt(0).Price);
             }
         }
-
-        internal class IdMap0
-        {
-            public ObjectId _ID { get; set; }
-        }
-
-        internal class IdMap1
-        {
-            [MongoIdentifier]
-            public ObjectId TheID { get; set; }
-        }
-
-        internal class IdMap2
-        {
-            public ObjectId ID { get; set; }
-        }
-
-        internal class IdMap3
-        {
-            public ObjectId id { get; set; }
-        }
-
-        internal class IdMap4
-        {
-            public ObjectId Id { get; set; }
-        }
-
-        public class OtherMap : MongoConfigurationMap
-        {
-            public OtherMap()
-            {
-                For<User>(cfg => cfg.ForProperty(u => u.LastName).UseAlias("last"));
-            }
-        }
-
-        public class CustomMap : MongoConfigurationMap
-        {
-            public CustomMap()
-            {
-                this.For<User>(cfg =>
-                {
-                    cfg.ForProperty(u => u.FirstName).UseAlias("first");
-                    cfg.ForProperty(u => u.LastName).UseAlias("last");
-                    cfg.UseCollectionNamed("UserBucket");
-                    cfg.UseConnectionString(TestHelper.ConnectionString());
-                });
-
-                this.For<Product>(cfg => cfg.ForProperty(p => p.Name).UseAlias("productname"));
-            }
-        }
-
-        #endregion
     }
 }

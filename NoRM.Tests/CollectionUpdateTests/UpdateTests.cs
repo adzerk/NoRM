@@ -26,6 +26,31 @@ namespace Norm.Tests
         }
 
         [Fact]
+        public void Save_Inserts_Or_Updates()
+        {
+            var c = new CheeseClubContact();
+            c.Id = ObjectId.NewObjectId();
+            _collection.Save(c);
+            var a = _collection.FindOne(new { c.Id });
+            //prove it was inserted.
+            Assert.Equal(c.Id, a.Id);
+
+            c.Name = "hello";
+            _collection.Save(c);
+            var b = _collection.FindOne(new { c.Id });
+            //prove that it was updated.
+            Assert.Equal(c.Name, b.Name);
+        }
+
+        [Fact]
+        public void Update_Multiple_With_Lambda_Works()
+        {
+            _collection.Insert(new CheeseClubContact { Name = "Hello" }, new CheeseClubContact { Name = "World" });
+            _collection.Update(new { Name = Q.NotEqual("") }, h => h.SetValue(y => y.Name, "Cheese"), true, false);
+            Assert.Equal(2, _collection.Find(new { Name = "Cheese" }).Count());
+        }
+
+        [Fact]
         public void BasicUsageOfUpdateOne()
         {
             var aPerson = new CheeseClubContact { Name = "Joe", FavoriteCheese = "Cheddar" };
@@ -39,7 +64,7 @@ namespace Norm.Tests
 
             _collection.UpdateOne(matchDocument, aPerson);
 
-            var query = new Flyweight();
+            var query = new Expando();
             query["Name"] = Q.Equals<string>("Joe");
 
             var retreivedPerson = _collection.FindOne(query);
@@ -61,7 +86,7 @@ namespace Norm.Tests
 
             _collection.UpdateOne(matchDocument, aPerson);
 
-            var query = new Flyweight();
+            var query = new Expando();
             query["_id"] = Q.Equals<ObjectId>(aPerson.Id);
 
             var retreivedPerson = _collection.FindOne(query);
@@ -83,10 +108,10 @@ namespace Norm.Tests
 
             var matchDocument = new { Name = "Joe" };
             var updatesToApply = new { Name = "Joseph" };
-            
+
             _collection.UpdateOne(matchDocument, updatesToApply);
 
-            var query = new Flyweight();
+            var query = new Expando();
             query["Name"] = Q.Equals<string>("Joseph");
 
             var retreivedPerson = _collection.FindOne(query);

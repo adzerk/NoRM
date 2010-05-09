@@ -46,13 +46,20 @@ namespace Norm.Protocol.Messages
         /// <summary>
         /// A BSON query.
         /// </summary>
+        /// <value>The Query property gets/sets the Query data member.</value>
         public U Query
         {
             get;
             set;
         }
 
+        /// <summary>
+        /// The fields to select
+        /// </summary>
+        internal FieldSelectionList FieldSelection { get; set; }
+
         /// <summary>TODO::Description.</summary>
+        /// <value>The OrderBy property gets/sets the OrderBy data member.</value>
         public object OrderBy
         {
             get;
@@ -71,6 +78,7 @@ namespace Norm.Protocol.Messages
         /// <summary>
         /// The number of documents to skip before starting to return documents.
         /// </summary>
+        /// <value>The Map property gets/sets the Map data member.</value>
         public int NumberToSkip { get; set; }
 
         /// <summary>
@@ -98,7 +106,7 @@ namespace Norm.Protocol.Messages
             }
             else
             {
-                var fly = new Flyweight();
+                var fly = new Expando();
 
                 //if (this.Query is Flyweight)
                 //{
@@ -107,13 +115,18 @@ namespace Norm.Protocol.Messages
                 //}
                 fly["query"] = this.Query;
 
-                //null for this is OK. needs to be here, though.
+                //null for this is WasSuccessful. needs to be here, though.
                 if (this.OrderBy != null)
                 {
                     fly["orderby"] = this.OrderBy;
-                }
+                }                
                 //add more query options here, as needed.
                 messageBytes.Add(BsonSerializer.Serialize(fly));
+                
+                if (FieldSelection != null)
+                {
+                    messageBytes.Add(BsonSerializer.Serialize(FieldSelection));
+                }
             }
             #endregion
 

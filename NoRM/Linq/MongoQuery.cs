@@ -16,10 +16,8 @@ namespace Norm.Linq
     /// <typeparam name="T">Type to query; also the underlying collection type.</typeparam>
     public class MongoQuery<T> : IQueryable<T>, IQueryable, IEnumerable<T>, IEnumerable, IOrderedQueryable<T>, IOrderedQueryable, IMongoQuery
     {
-        //private MongoCollection<T> _collection;
         private readonly Expression _expression;
         private readonly MongoQueryProvider _provider;
-        //private Flyweight _query;
         private readonly string _collectionName;
 
         /// <summary>
@@ -43,8 +41,6 @@ namespace Norm.Linq
             _provider = provider;
             _expression = Expression.Constant(this);
             _collectionName = collectionName;
-            //_collection = GetCollection<T>(); //provider.DB.GetCollection<T>();
-            //_query = new Flyweight();
         }
 
         /// <summary>
@@ -133,8 +129,7 @@ namespace Norm.Linq
         /// </returns>
         public virtual IEnumerator<T> GetEnumerator()
         {
-            // var docs= (ICursor)this.provider.Execute(this.expression);
-            return _provider.Execute<T>(_expression).GetEnumerator();
+            return ((IEnumerable<T>)_provider.ExecuteQuery<T>(_expression)).GetEnumerator();
         }
 
         /// <summary>
@@ -152,7 +147,7 @@ namespace Norm.Linq
         /// </summary>
         /// <param name="query">The query.</param>
         /// <returns></returns>
-        internal ExplainResponse Explain(Flyweight query)
+        internal ExplainResponse Explain(Expando query)
         {
             var collectionName = MongoConfiguration.GetCollectionName(typeof(T));
             return this.GetCollection<ExplainResponse>(collectionName).Explain(query);

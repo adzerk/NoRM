@@ -10,6 +10,12 @@ namespace Norm
     /// </summary>
     public class ConnectionStringBuilder : IOptionsContainer
     {
+        private String _connectionString;
+        public override string ToString()
+        {
+            return this._connectionString;
+        }
+
         private const string DEFAULT_DATABASE = "admin";
         private const int DEFAULT_PORT = 27017;
         private const string PROTOCOL = "mongodb://";
@@ -17,7 +23,6 @@ namespace Norm
               {
                   {"strict", (v, b) => b.SetStrictMode(bool.Parse(v))},
                   {"querytimeout", (v, b) => b.SetQueryTimeout(int.Parse(v))},
-                  {"expando", (v, b) => b.SetEnableExpandoProperties(bool.Parse(v))},
                   {"pooling", (v, b) => b.SetPooled(bool.Parse(v))},
                   {"poolsize", (v, b) => b.SetPoolSize(int.Parse(v))},
                   {"timeout", (v, b) => b.SetTimeout(int.Parse(v))},
@@ -56,11 +61,7 @@ namespace Norm
         /// </summary>
         public int QueryTimeout { get; private set; }
 
-        /// <summary>
-        /// Gets a value indicating whether to enable ExpandoProperties.
-        /// </summary>
-        public bool EnableExpandoProperties { get; private set; }
-
+       
         /// <summary>
         /// Gets a value indicating whether strict mode is enabled.
         /// </summary>
@@ -105,13 +106,7 @@ namespace Norm
                 }
                 catch (NullReferenceException)
                 {
-                    throw new MongoException("Connection string is missing");
-                }
-
-                if (string.IsNullOrEmpty(connection) ||
-                    !connection.StartsWith(PROTOCOL, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    throw new MongoException("Invalid connection string: the protocol must be mongodb://");
+                    throw new MongoException("Connection String must start with 'mongodb://' or be the name of a connection string in the app.config.");
                 }
             }
 
@@ -122,10 +117,10 @@ namespace Norm
             {
                 QueryTimeout = 30,
                 Timeout = 30,
-                EnableExpandoProperties = false,
                 StrictMode = true,
                 Pooled = true,
                 PoolSize = 25,
+                Lifetime = 15,
             };
            
             // var coreBuilder = new StringBuilder();
@@ -134,6 +129,7 @@ namespace Norm
                 .BuildServerList(sb);
 
             BuildOptions(builder, options);
+            builder._connectionString = connection;
             return builder;
         }
 
@@ -148,16 +144,6 @@ namespace Norm
             QueryTimeout = timeout;
         }
 
-        /// <summary>
-        /// Sets enable expando properties.
-        /// </summary>
-        /// <param name="enabled">
-        /// The enabled.
-        /// </param>
-        public void SetEnableExpandoProperties(bool enabled)
-        {
-            EnableExpandoProperties = enabled;
-        }
 
         /// <summary>
         /// Sets strict mode.
@@ -246,7 +232,6 @@ namespace Norm
         /// The build authentication.
         /// </summary>
         /// <param name="sb">The string builder.</param>
-        /// <param name="coreBuilder">The core builder.</param>
         /// <returns></returns>
         /// <exception cref="MongoException">
         /// </exception>

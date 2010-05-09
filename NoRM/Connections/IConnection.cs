@@ -9,6 +9,11 @@ namespace Norm
     public interface IConnection : IDisposable
     {
         /// <summary>
+        /// The connection string used to create this connection.
+        /// </summary>
+        string ConnectionString { get; }
+
+        /// <summary>
         /// Gets the tcp client.
         /// </summary>
         TcpClient Client { get; }
@@ -33,10 +38,6 @@ namespace Norm
         /// </summary>
         int QueryTimeout { get; }
 
-        /// <summary>
-        /// Gets a value indicating whether to enable ExpandoProperties.
-        /// </summary>
-        bool EnableExpandoProperties { get; }
 
         /// <summary>
         /// Gets a value indicating whether to use strict mode.

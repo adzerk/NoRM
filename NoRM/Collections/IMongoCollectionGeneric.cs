@@ -1,13 +1,18 @@
 ﻿using System.Collections.Generic;
+using System;
 
 namespace Norm.Collections
 {
+    public interface IMongoCollection : IMongoCollection<Object>
+    {
+
+    }
 
     /// <summary>
     /// Generic collection interface
     /// </summary>
     /// <typeparam name="T">The type of collection</typeparam>
-    public interface IMongoCollection<T> : IMongoCollection
+    public interface IMongoCollection<T> 
     {
         /// <summary>
         /// Finds the specified document.
@@ -21,7 +26,7 @@ namespace Norm.Collections
         /// Finds all documents.
         /// </summary>
         /// <returns></returns>
-        IEnumerable<T> Find();
+        new IEnumerable<T> Find();
 
         /// <summary>
         /// Finds the specified document with a limited result set.
@@ -87,15 +92,6 @@ namespace Norm.Collections
         bool Updateable { get; }
 
         /// <summary>
-        /// Updates multiple documents.
-        /// </summary>
-        /// <typeparam name="X">Document to match</typeparam>
-        /// <typeparam name="U">Document to update</typeparam>
-        /// <param name="matchDocument">The match document.</param>
-        /// <param name="valueDocument">The value document.</param>
-        void UpdateMultiple<X, U>(X matchDocument, U valueDocument);
-
-        /// <summary>
         /// Updates one document.
         /// </summary>
         /// <typeparam name="X">Document to match</typeparam>
@@ -104,16 +100,6 @@ namespace Norm.Collections
         /// <param name="valueDocument">The value document.</param>
         void UpdateOne<X, U>(X matchDocument, U valueDocument);
 
-
-
-        /// <summary>
-        /// Attempts to save or update an instance
-        /// </summary>
-        /// <param name="entity">The entity.</param>
-        /// <remarks>
-        /// Only works when the Id property is of type ObjectId
-        /// </remarks>
-        void Save(T entity);
 
         /// <summary>
         /// Delete the documents that mact the specified template.
@@ -161,6 +147,6 @@ namespace Norm.Collections
         /// </summary>
         /// <param name="options"></param>
         /// <returns></returns>
-        new IEnumerable<X> MapReduce<X>(MapReduceOptions<T> options);
+        IEnumerable<X> MapReduce<X>(MapReduceOptions<T> options);
     }
 }

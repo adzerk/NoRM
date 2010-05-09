@@ -31,6 +31,7 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -87,6 +88,9 @@
     <Compile Include="BSON\BsonSerializer.cs" />
     <Compile Include="BSON\BSONTypes.cs" />
     <Compile Include="BSON\ExpandoProperty.cs" />
+    <Compile Include="BSON\FieldSelectionList.cs" />
+    <Compile Include="BSON\IdPropertyFinder.cs" />
+    <Compile Include="BSON\IExpando.cs" />
     <Compile Include="BSON\Lists\ArrayWrapper.cs" />
     <Compile Include="BSON\Lists\BaseWrapper.cs" />
     <Compile Include="BSON\Lists\CollectionWrapper.cs" />
@@ -101,10 +105,10 @@
     <Compile Include="BSON\ModifierCommand.cs" />
     <Compile Include="BSON\TypeHelper.cs" />
     <Compile Include="Collections\CreateCollectionOptions.cs" />
-    <Compile Include="Collections\IMongoCollection.cs" />
     <Compile Include="Collections\IMongoCollectionGeneric.cs" />
     <Compile Include="Collections\MongoCollection.cs" />
     <Compile Include="Collections\MongoCollectionGeneric.cs" />
+    <Compile Include="Collections\MongoCollectionLINQ.cs" />
     <Compile Include="Commands\Modifiers\AddToSetOperation.cs" />
     <Compile Include="Commands\Modifiers\IModifierExpression.cs" />
     <Compile Include="Commands\Modifiers\ModifierExpression.cs" />
@@ -114,7 +118,9 @@
     <Compile Include="Commands\Modifiers\PushAllOperation.cs" />
     <Compile Include="Commands\Modifiers\PushOperation.cs" />
     <Compile Include="Commands\Modifiers\SetOperation.cs" />
+    <Compile Include="Commands\OrderBy.cs" />
     <Compile Include="Commands\Qualifiers\AllQualifier.cs" />
+    <Compile Include="Commands\Qualifiers\ElementMatch.cs" />
     <Compile Include="Commands\Qualifiers\ExistsQuallifier.cs" />
     <Compile Include="Commands\Qualifiers\GreaterOrEqualQualifier.cs" />
     <Compile Include="Commands\Qualifiers\GreaterThanQualifier.cs" />
@@ -124,9 +130,7 @@
     <Compile Include="Commands\Qualifiers\NotEqualQualifier.cs" />
     <Compile Include="Commands\Qualifiers\NotInQualifier.cs" />
     <Compile Include="Commands\Qualifiers\SizeQualifier.cs" />
-    <Compile Include="BSON\ExpandoProps.cs" />
-    <Compile Include="BSON\IFlyweight.cs" />
-    <Compile Include="BSON\Flyweight.cs" />
+    <Compile Include="BSON\Expando.cs" />
     <Compile Include="Commands\Qualifiers\WhereQualifier.cs" />
     <Compile Include="Configuration\ConfigurationContainer.cs" />
     <Compile Include="Configuration\IConfigurationContainer.cs" />
@@ -136,6 +140,7 @@
     <Compile Include="Configuration\ITypedConfigurationGeneric.cs" />
     <Compile Include="Configuration\MongoConfiguration.cs" />
     <Compile Include="Configuration\MongoConfigurationMap.cs" />
+    <Compile Include="Configuration\MongoConfigurationMapException.cs" />
     <Compile Include="Configuration\MongoConfigurationTypeMap.cs" />
     <Compile Include="Configuration\MongoTypeConfiguration.cs" />
     <Compile Include="Configuration\MongoTypeConfigurationGeneric.cs" />
@@ -212,13 +217,11 @@
     <Compile Include="Protocol\Messages\DeleteMessage.cs" />
     <Compile Include="Protocol\Messages\GetMoreMessage.cs" />
     <Compile Include="Protocol\Messages\InsertMessage.cs" />
-    <Compile Include="Protocol\Messages\KillCursorsMessage.cs" />
     <Compile Include="Protocol\Messages\Message.cs" />
     <Compile Include="Protocol\MessageHeader.cs" />
     <Compile Include="Protocol\Messages\QueryOptions.cs" />
     <Compile Include="Protocol\Messages\UpdateOption.cs" />
     <Compile Include="Protocol\MongoOp.cs" />
-    <Compile Include="Protocol\Messages\QueryMessage.cs" />
     <Compile Include="Protocol\Messages\ReplyMessage.cs" />
     <Compile Include="Commands\Qualifiers\Q.cs" />
     <Compile Include="Protocol\SystemMessages\Responses\ListDatabasesResponse.cs" />

@@ -42,7 +42,7 @@ namespace Norm.BSON
         /// <returns></returns>
         public static T Deserialize<T>(byte[] objectData) where T : class
         {
-            IDictionary<WeakReference, Flyweight> outprops = new Dictionary<WeakReference, Flyweight>();
+            IDictionary<WeakReference, Expando> outprops = new Dictionary<WeakReference, Expando>();
             return Deserialize<T>(objectData, ref outprops);
         }
 
@@ -53,7 +53,7 @@ namespace Norm.BSON
         /// <param name="objectData">The object data.</param>
         /// <param name="outProps">The out props.</param>
         /// <returns></returns>
-        public static T Deserialize<T>(byte[] objectData, ref IDictionary<WeakReference, Flyweight> outProps)
+        public static T Deserialize<T>(byte[] objectData, ref IDictionary<WeakReference, Expando> outProps)
         {
             using (var ms = new MemoryStream())
             {
@@ -61,6 +61,18 @@ namespace Norm.BSON
                 ms.Position = 0;
                 return Deserialize<T>(new BinaryReader(ms));
             }
+        }
+
+        /// <summary>
+        /// Deserializes the specified object data.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="objectData">The object data.</param>
+        /// <param name="outProps">The out props.</param>
+        /// <returns></returns>
+        public static T Deserialize<T>(int length, BinaryReader reader, ref IDictionary<WeakReference, Expando> outProps)
+        {
+            return Deserialize<T>(reader, length);
         }
 
         /// <summary>
@@ -73,6 +85,11 @@ namespace Norm.BSON
         {
             return new BsonDeserializer(stream).Read<T>();
         }
+        private static T Deserialize<T>(BinaryReader stream, int length)
+        {
+            return new BsonDeserializer(stream).Read<T>(length);
+        }
+
 
         /// <summary>
         /// Reads a document instance.
@@ -81,8 +98,14 @@ namespace Norm.BSON
         /// <returns></returns>
         private T Read<T>()
         {
-            NewDocument(_reader.ReadInt32());
+            return Read<T>(_reader.ReadInt32());
+        }
+        private T Read<T>(int length)
+        {
+            NewDocument(length);
             var @object = (T)DeserializeValue(typeof(T), BSONTypes.Object);
+            // traverse the object T and apply the DefaultValue to the properties that have them
+
             return @object;
         }
 
@@ -207,7 +230,7 @@ namespace Norm.BSON
             {
                 return ReadScopedCode();
             }
-            if (type == typeof(Flyweight))
+            if (type == typeof(Expando))
             {
                 return ReadFlyweight();
             }
@@ -230,6 +253,7 @@ namespace Norm.BSON
             {
                 instance = Activator.CreateInstance(type, true);
                 typeHelper = TypeHelper.GetHelperForType(type);
+                typeHelper.ApplyDefaultValues(instance);
             }
             while (true)
             {
@@ -250,26 +274,22 @@ namespace Norm.BSON
                     type = Type.GetType(typeName, true);
                     typeHelper = TypeHelper.GetHelperForType(type);
                     instance = Activator.CreateInstance(type, true);
-
+                    typeHelper.ApplyDefaultValues(instance);
                     continue;
                 }
 
                 if (instance == null)
+                {
                     throw new MongoException("Could not find the type to instantiate in the document, and " + type.Name + " is an interface or abstract type. Add a MongoDiscriminatedAttribute to the type or base type, or try to work with a concrete type next time.");
-
-                processedNonTypeProperties = true;
+                }
                 
+                processedNonTypeProperties = true;
+
                 var property = (name == "_id" || name == "$id")
                     ? typeHelper.FindIdProperty()
                     : typeHelper.FindProperty(name);
 
-
-                if(name == "")
-                {
-                    break;
-                }
-
-                if (property == null)
+                if (property == null && !typeHelper.IsExpando)
                 {
                     throw new MongoException(string.Format("Deserialization failed: type {0} does not have a property named {1}", type.FullName, name));
                 }
@@ -285,16 +305,21 @@ namespace Norm.BSON
                     }
                     else
                     {
-                        NewDocument(length);    
-                    }                                        
+                        NewDocument(length);
+                    }
                 }
                 object container = null;
-                if (property.Setter == null)
+                if (property != null && property.Setter == null)
                 {
-                    container = property.Getter(instance);                    
+                    container = property.Getter(instance);
                 }
-                var value = isNull ? null : DeserializeValue(property.Type, storageType, container);
-                if (container == null && value!=null)
+                var propertyType = property != null ? property.Type : _typeMap.ContainsKey(storageType) ? _typeMap[storageType] : typeof(object);
+                var value = isNull ? null : DeserializeValue(propertyType, storageType, container);
+                if (property == null)
+                {
+                    ((IExpando)instance)[name] = value;
+                }
+                else if (container == null && value != null)
                 {
                     property.Setter(instance, value);
                 }
@@ -357,7 +382,7 @@ namespace Norm.BSON
                     return true;
                 }
             }
-            return false; 
+            return false;
         }
 
         /// <summary>
@@ -540,16 +565,16 @@ namespace Norm.BSON
             Read(4);
             var name = ReadString();
             NewDocument(_reader.ReadInt32());
-            return new ScopedCode { CodeString = name, Scope = DeserializeValue(typeof(Flyweight), BSONTypes.Object) };
+            return new ScopedCode { CodeString = name, Scope = DeserializeValue(typeof(Expando), BSONTypes.Object) };
         }
 
         /// <summary>
         /// Reads a flyweight.
         /// </summary>
         /// <returns></returns>
-        private Flyweight ReadFlyweight()
+        private Expando ReadFlyweight()
         {
-            var flyweight = new Flyweight();
+            var flyweight = new Expando();
             while (true)
             {
                 var storageType = ReadType();
