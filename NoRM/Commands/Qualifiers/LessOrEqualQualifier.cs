@@ -10,8 +10,8 @@ namespace Norm.Commands.Qualifiers
         /// <summary>
         /// Initializes a new instance of the <see cref="LessOrEqualQualifier"/> class.
         /// </summary>
-        /// <param name="value">The value.</param>
-        internal LessOrEqualQualifier(double value) : base("$lte", value)
+        /// <param retval="value">The value.</param>
+        internal LessOrEqualQualifier(object value) : base("$lte", value)
         {
         }
     }

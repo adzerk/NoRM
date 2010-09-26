@@ -8,9 +8,9 @@ namespace Norm.Tests.CollectionUpdateTests
 {
     public class UpdateModifiersTests : IDisposable
     {
-        private readonly Mongo _server;
+        private readonly IMongo _server;
         private BuildInfoResponse _buildInfo = null;
-        private readonly MongoCollection<Post> _collection;
+        private readonly IMongoCollection<Post> _collection;
 
 
         public UpdateModifiersTests()

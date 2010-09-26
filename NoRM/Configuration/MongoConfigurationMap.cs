@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Linq;
 using Norm.BSON;
 using System.Collections.Generic;
 using System.Reflection;
 using Norm.BSON.DbTypes;
+using System.Text.RegularExpressions;
 
 namespace Norm.Configuration
 {
@@ -13,15 +15,50 @@ namespace Norm.Configuration
     {
         private Dictionary<Type, String> _idProperties = new Dictionary<Type, string>();
 
+        private IDictionary<Type, IBsonTypeConverter> TypeConverters = new Dictionary<Type, IBsonTypeConverter>();
+        //private IBsonTypeConverterRegistry BsonTypeConverterRegistry = new BsonTypeConverterRegistry();
+
         /// <summary>
         /// Configures properties for type T
         /// </summary>
-        /// <typeparam name="T">Type to configure</typeparam>
-        /// <param name="typeConfigurationAction">The type configuration action.</param>
+        /// <typeparam retval="T">Type to configure</typeparam>
+        /// <param retval="typeConfigurationAction">The type configuration action.</param>
         public void For<T>(Action<ITypeConfiguration<T>> typeConfigurationAction)
         {
             var typeConfiguration = new MongoTypeConfiguration<T>();
             typeConfigurationAction((ITypeConfiguration<T>)typeConfiguration);
+        }
+
+        /// <summary>
+        /// Configures a type converter for type TClr
+        /// </summary>
+        /// <remarks>A type converter is used to convert any .NET CLR type into a CLR type that Mongo BSON
+        /// understands. For instance turning a CultureInfo into a string and back again. This method registers
+        /// known converters.</remarks>
+        /// <typeparam name="TClr"></typeparam>
+        /// <typeparam name="TCnv"></typeparam>
+        public void TypeConverterFor<TClr, TCnv>() where TCnv : IBsonTypeConverter, new()
+        {
+            Type ClrType = typeof(TClr);
+            Type CnvType = typeof(TCnv);
+
+            if (TypeConverters.ContainsKey(ClrType))
+                throw new ArgumentException(string.Format("The type '{0}' has already a type converter registered ({1}). You are trying to register '{2}'",
+                                                          ClrType, TypeConverters[ClrType], CnvType));
+
+            TypeConverters.Add(ClrType, new TCnv());
+        }
+
+        public IBsonTypeConverter GetTypeConverterFor(Type t)
+        {
+            IBsonTypeConverter converter = null;
+            TypeConverters.TryGetValue(t, out converter);
+            return converter;
+        }
+
+        public void RemoveTypeConverterFor<TClr>()
+        {
+            TypeConverters.Remove(typeof(TClr));
         }
 
         private bool IsIdPropertyForType(Type type, String propertyName)
@@ -30,7 +67,7 @@ namespace Norm.Configuration
 
             if (!_idProperties.ContainsKey(type))
             {
-                PropertyInfo idProp = TypeHelper.FindIdProperty(type);
+                PropertyInfo idProp = ReflectionHelper.FindIdProperty(type);
 
                 if (idProp != null)
                 {
@@ -48,7 +85,7 @@ namespace Norm.Configuration
         /// <summary>
         /// Checks to see if the object is a DbReference. If it is, we won't want to override $id to _id.
         /// </summary>
-        /// <param name="type">The type of the object being serialized.</param>
+        /// <param retval="type">The type of the object being serialized.</param>
         /// <returns>True if the object is a DbReference, false otherwise.</returns>
         private static bool IsDbReference(Type type)
         {
@@ -64,11 +101,11 @@ namespace Norm.Configuration
         /// </summary>
         /// <remarks>
         /// If it's the ID Property, returns "_id" regardless of additional mapping.
-        /// If it's not the ID Property, returns the mapped name if it exists.
+        /// If it's not the ID Property, returns the mapped retval if it exists.
         /// Else return the original propertyName.
         /// </remarks>
-        /// <param name="type">The type.</param>
-        /// <param name="propertyName">Name of the type's property.</param>
+        /// <param retval="type">The type.</param>
+        /// <param retval="propertyName">Name of the type's property.</param>
         /// <returns>
         /// Type's property alias if configured; otherwise null
         /// </returns>
@@ -76,46 +113,80 @@ namespace Norm.Configuration
         {
             var map = MongoTypeConfiguration.PropertyMaps;
             var retval = propertyName;//default to the original.
-
+            var discriminator = MongoDiscriminatedAttribute.GetDiscriminatingTypeFor(type);
             if (IsIdPropertyForType(type, propertyName) && !IsDbReference(type))
             {
                 retval = "_id";
             }
-            else if (map.ContainsKey(type))
+            else if (map.ContainsKey(type) && map[type].ContainsKey(propertyName))
             {
-                foreach (var m in map.Keys)
-                {
-                    if (map[m].ContainsKey(propertyName))
-                    {
-                        retval = map[m][propertyName].Alias;
-                        break;
-                    }
-                }
+                retval = map[type][propertyName].Alias;             
+            }
+            else if (discriminator != null && discriminator != type )
+            {
+                //if we are are inheriting
+                //checked for ID and in the current type helper.
+                retval = this.GetPropertyAlias(discriminator, propertyName);
             }
             return retval;
         }
 
-        public Type SummaryTypeFor(Type type)
+        /// <summary>
+        /// Gets the fluently configured discriminator type string for a type.
+        /// </summary>
+        /// <param name="type">The type for which to get the discriminator type.</param>
+        /// <returns>The discriminator type string for the given given.</returns>
+        public string GetTypeDescriminator(Type type)
         {
-            var summaryTypes = MongoTypeConfiguration.SummaryTypes;
-            return summaryTypes.ContainsKey(type) ? summaryTypes[type] : null;
+            var inheritanceChain = GetInheritanceChain(type);
+            var discriminatedTypes = MongoTypeConfiguration.DiscriminatedTypes;
+            var discriminatingType = inheritanceChain.FirstOrDefault(t => discriminatedTypes.ContainsKey(t) && discriminatedTypes[t] == true);
+            
+            if (discriminatingType != null) 
+            {
+                return String.Join(",", type.AssemblyQualifiedName.Split(','), 0, 2);
+            }
+            return null;
         }
 
+        private IEnumerable<Type> GetInheritanceChain(Type type)
+        {
+            var inheritanceChain = new List<Type> { type };
+            if (type == typeof(object))
+            {
+                return inheritanceChain;
+            }
+            inheritanceChain.AddRange(type.GetInterfaces());
+            
+            while (type.BaseType != typeof(object))
+            {
+                inheritanceChain.Add(type.BaseType);
+                inheritanceChain.AddRange(type.BaseType.GetInterfaces());
+                type = type.BaseType;
+            }
+            return inheritanceChain;
+        }
+
+
         /// <summary>
-        /// Gets the name of the type's collection.
+        /// Gets the retval of the type's collection.
         /// </summary>
-        /// <param name="type">The type.</param>
-        /// <returns>The get collection name.</returns>
+        /// <param retval="type">The type.</param>
+        /// <returns>The get collection retval.</returns>
         public string GetCollectionName(Type type)
         {
-            var collections = MongoTypeConfiguration.CollectionNames;
-            return collections.ContainsKey(type) ? collections[type] : type.Name;
+            String retval;
+            if (!MongoTypeConfiguration.CollectionNames.TryGetValue(type, out retval))
+            {
+                retval = ReflectionHelper.GetScrubbedGenericName(type);
+            }
+            return retval;
         }
 
         /// <summary>
         /// Gets the connection string.
         /// </summary>
-        /// <param name="type">The type.</param>
+        /// <param retval="type">The type.</param>
         /// <returns>The get connection string.</returns>
         public string GetConnectionString(Type type)
         {
@@ -129,7 +200,7 @@ namespace Norm.Configuration
         /// <remarks>
         /// Added to support Unit testing. Use at your own risk!
         /// </remarks>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam retval="T"></typeparam>
         public void RemoveFor<T>()
         {
             MongoTypeConfiguration.RemoveMappings<T>();

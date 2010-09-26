@@ -1,4 +1,5 @@
-﻿using Norm.BSON;
+﻿using System;
+using Norm.BSON;
 
 namespace Norm.Commands.Qualifiers
 {
@@ -10,11 +11,12 @@ namespace Norm.Commands.Qualifiers
         /// <summary>
         /// Initializes a new instance of the <see cref="GreaterOrEqualQualifier"/> class.
         /// </summary>
-        /// <param name="value">
+        /// <param retval="value">
         /// The value.
         /// </param>
-        internal GreaterOrEqualQualifier(double value) : base("$gte", value)
+        internal GreaterOrEqualQualifier(object value) : base("$gte", value)
         {
         }
+
     }
 }

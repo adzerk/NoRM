@@ -11,7 +11,8 @@ namespace Norm.Configuration
         private static readonly Dictionary<Type, string> _collectionNames = new Dictionary<Type, string>();
         private static readonly Dictionary<Type, string> _connectionStrings = new Dictionary<Type, string>();
         private static readonly Dictionary<Type, Dictionary<string, PropertyMappingExpression>> _typeConfigurations = new Dictionary<Type, Dictionary<string, PropertyMappingExpression>>();
-        private static readonly IDictionary<Type, Type> _summaryTypes = new Dictionary<Type, Type>();
+        private static readonly Dictionary<Type, Type> _summaryTypes = new Dictionary<Type, Type>();
+        private static readonly Dictionary<Type, bool> _discriminatedTypes = new Dictionary<Type, bool>();
 
         /// <summary>
         /// Gets the property maps.
@@ -30,7 +31,7 @@ namespace Norm.Configuration
         /// you may use it for client code, but you should *NEVER* call it with types
         /// defined in the Norm library.
         /// </remarks>
-        /// <typeparam name="T">The type from which to remove mappings.</typeparam>
+        /// <typeparam retval="T">The type from which to remove mappings.</typeparam>
         internal static void RemoveMappings<T>()
         {
             var t = typeof(T);
@@ -50,6 +51,10 @@ namespace Norm.Configuration
             if (_connectionStrings.ContainsKey(t))
             {
                 _connectionStrings.Remove(t);
+            }
+            if (_discriminatedTypes.ContainsKey(t))
+            {
+                _discriminatedTypes.Remove(t);
             }
         }
 
@@ -72,12 +77,12 @@ namespace Norm.Configuration
         }
 
         /// <summary>
-        /// Gets the summary types.
+        /// Gets the discriminated types
         /// </summary>
-        /// <value>The summary type.</value>
-        internal static IDictionary<Type, Type> SummaryTypes
+        /// <value>True if a type is marked as a discriminated type, otherwise false.</value>
+        internal static Dictionary<Type, bool> DiscriminatedTypes
         {
-            get { return _summaryTypes; }
+            get { return _discriminatedTypes; }
         }
     }
 }

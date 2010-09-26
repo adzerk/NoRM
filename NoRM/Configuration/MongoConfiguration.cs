@@ -1,4 +1,5 @@
 ﻿using System;
+using Norm.BSON;
 
 namespace Norm.Configuration
 {
@@ -7,7 +8,7 @@ namespace Norm.Configuration
     /// </summary>
     /// <remarks>
     /// The BSON Serializer and LINQ-to-Mongo both use this in order to correctly map the property
-    /// name on the POCO to its correspondent field name in the database.
+    /// retval on the POCO to its correspondent field retval in the database.
     /// 
     /// This is slightly thread-scary.
     /// </remarks>
@@ -45,7 +46,7 @@ namespace Norm.Configuration
         /// Kill a map for the specified type.
         /// </summary>
         /// <remarks>This is here for unit testing support, use at your own risk.</remarks>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam retval="T"></typeparam>
         public static void RemoveMapFor<T>()
         {
             if (_configuration != null)
@@ -55,9 +56,22 @@ namespace Norm.Configuration
         }
 
         /// <summary>
+        /// Remove a type converter for the specified type.
+        /// </summary>
+        /// <remarks>This is here for unit testing support, use at your own risk.</remarks>
+        /// <typeparam name="TClr"></typeparam>
+        public static void RemoveTypeConverterFor<TClr>()
+        {
+            if (_configuration != null)
+            {
+                _configuration.RemoveTypeConverterFor<TClr>();
+            }
+        }
+
+        /// <summary>
         /// Allows various objects to fire type change event.
         /// </summary>
-        /// <param name="t"></param>
+        /// <param retval="t"></param>
         internal static void FireTypeChangedEvent(Type t)
         {
             if (TypeConfigurationChanged != null)
@@ -69,18 +83,18 @@ namespace Norm.Configuration
         /// <summary>
         /// Given this singleton IConfigurationContainer, add a fluently-defined map.
         /// </summary>
-        /// <param name="action">The action.</param>
+        /// <param retval="action">The action.</param>
         public static void Initialize(Action<IConfigurationContainer> action)
         {
             action(ConfigurationContainer);
         }
 
         /// <summary>
-        /// Given the type, and the property name,
+        /// Given the type, and the property retval,
         /// get the alias as it has been defined by Initialization calls of "add"
         /// </summary>
-        /// <param name="type">The type.</param>
-        /// <param name="propertyName">Name of the property.</param>
+        /// <param retval="type">The type.</param>
+        /// <param retval="propertyName">Name of the property.</param>
         /// <returns>
         /// Property alias if one is configured; otherwise returns the input propertyName
         /// </returns>
@@ -89,19 +103,24 @@ namespace Norm.Configuration
             return _configuration != null ? _configuration.GetConfigurationMap().GetPropertyAlias(type, propertyName) : propertyName;
         }
 
+        internal static IBsonTypeConverter GetBsonTypeConverter(Type t)
+        {
+            return _configuration != null ? _configuration.GetTypeConverterFor(t) : null;
+        }
+
         /// <summary>
         /// Given the type, get the fluently configured collection type.
         /// </summary>
-        /// <param name="type">The type.</param>
-        /// <returns>Type's Collection name</returns>
+        /// <param retval="type">The type.</param>
+        /// <returns>Type's Collection retval</returns>
         internal static string GetCollectionName(Type type)
         {
         	var discriminatingType = MongoDiscriminatedAttribute.GetDiscriminatingTypeFor(type);
             if (discriminatingType != null)
                 return discriminatingType.Name;
 
-            var realType = SummaryTypeFor(type) ?? type;
-            return _configuration != null ? _configuration.GetConfigurationMap().GetCollectionName(realType) : realType.Name;
+            return _configuration != null ? _configuration.GetConfigurationMap().GetCollectionName(type) : 
+                ReflectionHelper.GetScrubbedGenericName(type);
         }
 
         /// <summary>
@@ -110,7 +129,7 @@ namespace Norm.Configuration
         /// <remarks>
         /// ATT: Not sure this is needed, should potentially be removed if possible.
         /// </remarks>
-        /// <param name="type">The type for whicht to get the connection string.</param>
+        /// <param retval="type">The type for whicht to get the connection string.</param>
         /// <returns>
         /// The type's connection string if configured; otherwise null.
         /// </returns>
@@ -120,12 +139,15 @@ namespace Norm.Configuration
         }
 
         /// <summary>
-        /// If the given type is a summary objet, the underlying type is returned (else null)
+        /// Given a type, get fluently configured discriminator type string
         /// </summary>
-        /// <remarks>
-        internal static Type SummaryTypeFor(Type type)
+        /// <param retval="type">The type for whicht to get the discriminator type.</param>
+        /// <returns>
+        /// The type's discriminator type if configured; otherwise null.
+        /// </returns>
+        public static string GetTypeDiscriminator(Type type)
         {
-            return _configuration != null ? _configuration.GetConfigurationMap().SummaryTypeFor(type) : null;
+            return _configuration != null ? _configuration.GetConfigurationMap().GetTypeDescriminator(type) : null;
         }
     }
 }

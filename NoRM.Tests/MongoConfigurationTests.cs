@@ -17,7 +17,7 @@ namespace Norm.Tests
             MongoConfiguration.RemoveMapFor<Shopper>();
             MongoConfiguration.RemoveMapFor<Cart>();
             MongoConfiguration.RemoveMapFor<TestProduct>();
-            MongoConfiguration.RemoveMapFor<ProductSummary>();
+            MongoConfiguration.RemoveTypeConverterFor<NonSerializableValueObject>();
 
             using (var admin = new MongoAdmin(TestHelper.ConnectionString()))
             {
@@ -38,13 +38,13 @@ namespace Norm.Tests
         [Fact]
         public void Mongo_Configuration_Should_Notify_TypeHelper()
         {
-            var typeHelper = TypeHelper.GetHelperForType(typeof(User2));
+            var typeHelper = ReflectionHelper.GetHelperForType(typeof(User2));
             Assert.Equal("LastName", typeHelper.FindProperty("LastName").Name);
 
             //the mapping should cause the typehelper cache to be rebuilt with the new properties.
             MongoConfiguration.Initialize(cfg => cfg.For<User2>(j => j.ForProperty(k => k.LastName).UseAlias("LNAME")));
 
-            typeHelper = TypeHelper.GetHelperForType(typeof(User2));
+            typeHelper = ReflectionHelper.GetHelperForType(typeof(User2));
             Assert.Equal("LastName", typeHelper.FindProperty("LNAME").Name);
         }
 
@@ -103,7 +103,7 @@ namespace Norm.Tests
         public void Mongo_Configuration_Remove_Mapping_Of_Norm_Types_Fails()
         {
             //removal of maps for Norm types is verboden.
-            Assert.Throws<NotSupportedException>(() => MongoConfiguration.RemoveMapFor<MongoDatabase>());
+            Assert.Throws<NotSupportedException>(() => MongoConfiguration.RemoveMapFor<IMongoDatabase>());
         }
 
         [Fact]
@@ -134,7 +134,7 @@ namespace Norm.Tests
         {
 
             MongoConfiguration.Initialize(c => c.AddMap<ShopperMap>());
-            using (var shoppers = new Shoppers(MongoQueryProvider.Create("mongodb://localhost:27017/test")))
+            using (var shoppers = new Shoppers(Mongo.Create("mongodb://localhost:27017/test")))
             {
                 shoppers.Drop<Shopper>();
                 shoppers.Add(new Shopper
@@ -176,7 +176,7 @@ namespace Norm.Tests
         public void Are_Queries_Fully_Linqified()
         {
             MongoConfiguration.Initialize(c => c.AddMap<ShopperMap>());
-            using (var shoppers = new Shoppers(MongoQueryProvider.Create("mongodb://localhost:27017/test")))
+            using (var shoppers = new Shoppers(Mongo.Create("mongodb://localhost:27017/test")))
             {
                 shoppers.Drop<Shopper>();
                 shoppers.Add(new Shopper
@@ -203,7 +203,7 @@ namespace Norm.Tests
                     }
                 });
 
-                var deepQuery = shoppers.Where(x => x.Cart.CartSuppliers.First().Name == "Supplier1").ToList();
+                var deepQuery = shoppers.Where(x => x.Cart.CartSuppliers.Any(y => y.Name == "Supplier1")).ToList();
                 Assert.Equal("John", deepQuery[0].Name);
                 Assert.Equal("Cart1", deepQuery[0].Cart.Name);
                 Assert.Equal(1, deepQuery.Count);
@@ -277,22 +277,13 @@ namespace Norm.Tests
                 Assert.Equal(typeof(SubClassedObjectFluentMapped), found.ElementAt(0).GetType());
             }
         }
-
+       
         [Fact]
-        public void MarksAClassAsASummary()
+        public void Can_Register_TypeConverter()
         {
-            MongoConfiguration.Initialize(m => m.For<ProductSummary>(p => p.SummaryOf<TestProduct>()));
-            using (var mongo = Mongo.Create(TestHelper.ConnectionString()))
-            {
-                mongo.GetCollection<TestProduct>().Insert(new TestProduct { UniqueID = Guid.NewGuid(), Available = DateTime.Now, Name = "Soap", Price = 2, Supplier = new Supplier { Name = "A Supplier" } });
-                mongo.GetCollection<TestProduct>().Insert(new TestProduct { UniqueID = Guid.NewGuid(), Available = DateTime.Now, Name = "Rope", Price = 1, Supplier = new Supplier { Name = "A Supplier" } });
-                mongo.GetCollection<TestProduct>().Insert(new TestProduct { UniqueID = Guid.NewGuid(), Available = DateTime.Now, Name = "Fun", Price = 0, Supplier = new Supplier { Name = "A Supplier" } });
-
-                var found = mongo.GetCollection<ProductSummary>().Find();
-                Assert.Equal(3, found.Count());
-                Assert.Equal("Soap", found.ElementAt(0).Name);
-                Assert.Equal(2, found.ElementAt(0).Price);
-            }
+            MongoConfiguration.Initialize(c => c.TypeConverterFor<NonSerializableValueObject, NonSerializableValueObjectTypeConverter>());
+            IBsonTypeConverter converter = MongoConfiguration.ConfigurationContainer.GetTypeConverterFor(typeof(NonSerializableValueObject));
+            Assert.Equal(typeof(NonSerializableValueObjectTypeConverter), converter.GetType());
         }
     }
 }

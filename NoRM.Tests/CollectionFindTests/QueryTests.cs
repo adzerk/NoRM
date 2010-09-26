@@ -1,19 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using Norm;
 using Norm.BSON;
+using Norm.Collections;
+using Norm.Commands.Modifiers;
 using Norm.Responses;
 using Xunit;
 using Norm.Collections;
-using System.Text.RegularExpressions;
-using System.Collections.Generic;
 
 namespace Norm.Tests
 {
     public class QueryTests : IDisposable
     {
-        private readonly Mongo _server;
+        private readonly IMongo _server;
         private BuildInfoResponse _buildInfo = null;
-        private readonly MongoCollection<Person> _collection;
+        private readonly IMongoCollection<Person> _collection;
         public QueryTests()
         {
             var admin = new MongoAdmin("mongodb://localhost/admin?pooling=false&strict=true");
@@ -35,7 +38,6 @@ namespace Norm.Tests
         }
 
 
-
         [Fact]
         public void FindUsesLimit()
         {
@@ -48,7 +50,6 @@ namespace Norm.Tests
             Assert.Equal(3, result.Length);
         }
 
-        [Fact(Skip="broken")]
         public void MongoCollection_Supports_LINQ()
         {
             _collection.Insert(new Person { Name = "BBB" });
@@ -56,8 +57,8 @@ namespace Norm.Tests
             _collection.Insert(new Person { Name = "AAA" });
             _collection.Insert(new Person { Name = "DDD" });
 
-            //var result = _collection.Where(y => y.Name == "AAA").ToArray();
-            //Assert.Equal(1, result.Length);
+            var result = _collection.AsQueryable().Where(y => y.Name == "AAA").ToArray();
+            Assert.Equal(1, result.Length);
         }
 
         [Fact]
@@ -382,6 +383,73 @@ namespace Norm.Tests
 
             var results = _collection.Distinct<Address>("Address");
             Assert.Equal(3, results.Count());
+        }
+
+        [Fact]
+        public void FindAndModify()
+        {
+            _collection.Insert(new Person { Name = "Joe Cool", Age = 10 });
+
+            var update = new Expando();
+            update["$inc"] = new { Age = 1 };
+
+            var result = _collection.FindAndModify(new { Name = "Joe Cool" }, update);
+            Assert.Equal(10, result.Age);
+
+            var result2 = _collection.Find(new { Name = "Joe Cool" }).FirstOrDefault();
+            Assert.Equal(11, result2.Age);
+        }
+
+        [Fact]
+        public void FindAndModifyWithSort()
+        {
+            _collection.Insert(new Person { Name = "Joe Cool", Age = 10 });
+            _collection.Insert(new Person { Name = "Joe Cool", Age = 15 });
+
+            var update = new Expando();
+            update["$inc"] = new { Age = 1 };
+
+            var result = _collection.FindAndModify(new { Name = "Joe Cool" }, update, new { Age = Norm.OrderBy.Descending });
+            Assert.Equal(15, result.Age);
+
+            var result2 = _collection.Find(new { Name = "Joe Cool" }).OrderByDescending(x => x.Age).ToList();
+            Assert.Equal(16, result2[0].Age);
+            Assert.Equal(10, result2[1].Age);
+
+        }
+
+        [Fact]
+        public void FindAndModifyReturnsNullWhenQueryNotFound()
+        {
+            _collection.Insert(new Person { Name = "Joe Cool", Age = 10 });
+            _collection.Insert(new Person { Name = "Joe Cool", Age = 15 });
+
+            var update = new Expando();
+            update["$inc"] = new { Age = 1 };
+
+            var result = _collection.FindAndModify(new { Name = "Joe Cool1" }, update, new { Age = Norm.OrderBy.Descending });
+            Assert.Null(result);
+
+            var result2 = _collection.Find(new { Age = 15 }).ToList();
+            Assert.Equal(1, result2.Count);
+        }
+
+        [Fact]
+        public void SliceOperatorBringsBackCorrectItems()
+        {
+            var isLessThan151 = Regex.IsMatch(_buildInfo.Version, "^(([01][.][01234])|(1.5.0))");
+            if (!isLessThan151)
+            {
+                Person p = new Person() { Relatives = new List<string>() { "Bob", "Joe", "Helen" } };
+                _collection.Insert(p);
+                var result = _collection.Find(new { }, new { _id = 1 }, new { Relatives = Q.Slice(1) }, 1, 0).FirstOrDefault();
+                Assert.NotNull(result);
+                Assert.Equal("Joe", result.Relatives.First());
+
+                result = _collection.Find(new { }, new { _id = 1 }, new { Relatives = Q.Slice(1, 2) }, 1, 0).FirstOrDefault();
+                Assert.NotNull(result);
+                Assert.True((new[] { "Joe", "Helen" }).SequenceEqual(result.Relatives));
+            }
         }
     }
 }

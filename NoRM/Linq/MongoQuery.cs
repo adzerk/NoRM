@@ -13,25 +13,26 @@ namespace Norm.Linq
     /// <summary>
     /// A default implementation of IQueryable for use with QueryProvider
     /// </summary>
-    /// <typeparam name="T">Type to query; also the underlying collection type.</typeparam>
-    public class MongoQuery<T> : IQueryable<T>, IQueryable, IEnumerable<T>, IEnumerable, IOrderedQueryable<T>, IOrderedQueryable, IMongoQuery
+    /// <typeparam retval="T">Type to query; also the underlying collection type.</typeparam>
+    internal class MongoQuery<T> : IQueryable<T>, IQueryable, IEnumerable<T>, IEnumerable, IOrderedQueryable<T>, IOrderedQueryable, IMongoQuery
     {
         private readonly Expression _expression;
         private readonly MongoQueryProvider _provider;
-        private readonly string _collectionName;
+
+        public String CollectionName { get { return this._provider.CollectionName; } }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoQuery{T}"/> class.
         /// </summary>
-        /// <param name="provider">
+        /// <param retval="provider">
         /// The provider.
         /// </param>
-        /// <param name="collectionName">
-        /// The collection name.
+        /// <param retval="collectionName">
+        /// The collection retval.
         /// </param>
         /// <exception cref="ArgumentNullException">
         /// </exception>
-        public MongoQuery(MongoQueryProvider provider, string collectionName)
+        public MongoQuery(MongoQueryProvider provider)
         {
             if (provider == null)
             {
@@ -40,27 +41,16 @@ namespace Norm.Linq
 
             _provider = provider;
             _expression = Expression.Constant(this);
-            _collectionName = collectionName;
         }
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoQuery{T}"/> class.
         /// </summary>
-        /// <param name="provider">
+        /// <param retval="provider">
         /// The provider.
         /// </param>
-        public MongoQuery(MongoQueryProvider provider)
-			: this(provider, MongoConfiguration.GetCollectionName(typeof(T)))
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MongoQuery{T}"/> class.
-        /// </summary>
-        /// <param name="provider">
-        /// The provider.
-        /// </param>
-        /// <param name="expression">
+        /// <param retval="expression">
         /// The expression.
         /// </param>
         /// <exception cref="ArgumentNullException">
@@ -69,6 +59,7 @@ namespace Norm.Linq
         /// </exception>
         public MongoQuery(MongoQueryProvider provider, Expression expression)
         {
+           
             if (provider == null)
             {
                 throw new ArgumentNullException("provider");
@@ -83,7 +74,7 @@ namespace Norm.Linq
             {
                 throw new ArgumentOutOfRangeException("expression");
             }
-
+            
             _provider = provider;
             _expression = expression;
         }
@@ -145,26 +136,22 @@ namespace Norm.Linq
         /// <summary>
         /// Gets an explain plan.
         /// </summary>
-        /// <param name="query">The query.</param>
+        /// <param retval="query">The query.</param>
         /// <returns></returns>
         internal ExplainResponse Explain(Expando query)
         {
-            var collectionName = MongoConfiguration.GetCollectionName(typeof(T));
-            return this.GetCollection<ExplainResponse>(collectionName).Explain(query);
-         }
-
-        /// <summary>TODO::Description.</summary>
-        private MongoCollection<TCollection> GetCollection<TCollection>()
-        {
-            var collectionName = _collectionName == string.Empty
-                ? MongoConfiguration.GetCollectionName(typeof(TCollection))
-                : _collectionName;
-
-            return GetCollection<TCollection>(collectionName);
+           
+            return this.GetCollection<ExplainResponse>(this._provider.CollectionName).Explain(query);
         }
 
         /// <summary>TODO::Description.</summary>
-        private MongoCollection<TCollection> GetCollection<TCollection>(string collectionName)
+        private IMongoCollection<TCollection> GetCollection<TCollection>()
+        {
+            return GetCollection<TCollection>(this._provider.CollectionName);
+        }
+
+        /// <summary>TODO::Description.</summary>
+        private IMongoCollection<TCollection> GetCollection<TCollection>(string collectionName)
         {
             return _provider.DB.GetCollection<TCollection>(collectionName);
         }
@@ -182,5 +169,6 @@ namespace Norm.Linq
 
             return _expression.ToString();
         }
+
     }
 }

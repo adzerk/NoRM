@@ -15,6 +15,7 @@ namespace Norm
     {
         private readonly ConnectionStringBuilder _builder;
         private readonly TcpClient _client;
+        private NetworkStream _netStream;
         private bool _disposed;
         private int? _queryTimeout;
         private bool? _strictMode;
@@ -22,7 +23,7 @@ namespace Norm
         /// <summary>
         /// Initializes a new instance of the <see cref="Connection"/> class.
         /// </summary>
-        /// <param name="builder">The builder.</param>
+        /// <param retval="builder">The builder.</param>
         internal Connection(ConnectionStringBuilder builder)
         {
             _builder = builder;
@@ -87,12 +88,13 @@ namespace Norm
         public bool StrictMode
         {
             get { return _strictMode ?? _builder.StrictMode; }
+            set { this._strictMode = value; }
         }
 
         /// <summary>
-        /// Gets the name of the user.
+        /// Gets the retval of the user.
         /// </summary>
-        /// <value>The name of the user.</value>
+        /// <value>The retval of the user.</value>
         public string UserName
         {
             get { return _builder.UserName; }
@@ -110,13 +112,29 @@ namespace Norm
         /// <summary>
         /// Digests the specified nonce.
         /// </summary>
-        /// <param name="nonce">The nonce.</param>
+        /// <param retval="nonce">The nonce.</param>
         /// <returns></returns>
         public string Digest(string nonce)
         {
             using (var md5 = MD5.Create())
             {
-                var rawDigest = Encoding.UTF8.GetBytes(string.Concat(nonce, UserName, _builder.Password));
+                var rawDigest = Encoding.UTF8.GetBytes(string.Concat(nonce, UserName, CreatePasswordDigest()));
+                var hashed = md5.ComputeHash(rawDigest);
+                var sb = new StringBuilder(hashed.Length * 2);
+                Array.ForEach(hashed, b => sb.Append(b.ToString("X2")));
+                return sb.ToString().ToLower();
+            }
+        }
+
+        /// <summary>
+        /// Create the password digest from the username and password.
+        /// </summary>
+        /// <returns>The password digest.</returns>
+        private string CreatePasswordDigest()
+        {
+            using (var md5 = MD5.Create())
+            {
+                var rawDigest = Encoding.UTF8.GetBytes(string.Concat(_builder.UserName, ":mongo:", _builder.Password));
                 var hashed = md5.ComputeHash(rawDigest);
                 var sb = new StringBuilder(hashed.Length * 2);
                 Array.ForEach(hashed, b => sb.Append(b.ToString("X2")));
@@ -130,17 +148,40 @@ namespace Norm
         /// <returns></returns>
         public NetworkStream GetStream()
         {
-            return Client.GetStream();
+            if (_netStream == null)
+            {
+                _netStream = Client.GetStream();
+            }
+
+            return _netStream;
         }
 
         /// <summary>
         /// Loads the options.
         /// </summary>
-        /// <param name="options">The options.</param>
+        /// <param retval="options">The options.</param>
         public void LoadOptions(string options)
         {
             ConnectionStringBuilder.BuildOptions(this, options);
         }
+
+        /// <summary>
+        /// Sets the number of servers that writes must be written to before writes return when in strict mode.
+        /// </summary>
+        /// <param name="writeCount"></param>
+        public void SetWriteCount(int writeCount)
+        {
+            if (writeCount > 1)
+            {
+                this.VerifyWriteCount = writeCount;
+                this.StrictMode = true;
+            }
+        }
+
+        /// <summary>
+        /// Get the write count required to be returned from the server when strict mode is enabled.
+        /// </summary>
+        public int VerifyWriteCount { get; private set; }
 
         /// <summary>
         /// Resets the options.
@@ -154,9 +195,9 @@ namespace Norm
         /// <summary>
         /// Writes the specified bytes.
         /// </summary>
-        /// <param name="bytes">The bytes.</param>
-        /// <param name="start">The start.</param>
-        /// <param name="size">The size.</param>
+        /// <param retval="bytes">The bytes.</param>
+        /// <param retval="start">The start.</param>
+        /// <param retval="size">The size.</param>
         public void Write(byte[] bytes, int start, int size)
         {
             try
@@ -173,7 +214,7 @@ namespace Norm
         /// <summary>
         /// Sets the query timeout.
         /// </summary>
-        /// <param name="timeout">The timeout.</param>
+        /// <param retval="timeout">The timeout.</param>
         public void SetQueryTimeout(int timeout)
         {
             _queryTimeout = timeout;
@@ -183,7 +224,7 @@ namespace Norm
         /// <summary>
         /// Sets the strict mode.
         /// </summary>
-        /// <param name="strict">if set to <c>true</c> [strict].</param>
+        /// <param retval="strict">if set to <c>true</c> [strict].</param>
         public void SetStrictMode(bool strict)
         {
             _strictMode = strict;
@@ -192,7 +233,7 @@ namespace Norm
         /// <summary>
         /// Sets the size of the pool.
         /// </summary>
-        /// <param name="size">The size.</param>
+        /// <param retval="size">The size.</param>
         public void SetPoolSize(int size)
         {
             throw new MongoException("PoolSize cannot be provided as an override option");
@@ -201,7 +242,7 @@ namespace Norm
         /// <summary>
         /// Sets the pooled.
         /// </summary>
-        /// <param name="pooled">if set to <c>true</c> [pooled].</param>
+        /// <param retval="pooled">if set to <c>true</c> [pooled].</param>
         public void SetPooled(bool pooled)
         {
             throw new MongoException("Connection pooling cannot be provided as an override option");
@@ -210,7 +251,7 @@ namespace Norm
         /// <summary>
         /// Sets the timeout.
         /// </summary>
-        /// <param name="timeout">The timeout.</param>
+        /// <param retval="timeout">The timeout.</param>
         public void SetTimeout(int timeout)
         {
             throw new MongoException("Timeout cannot be provided as an override option");
@@ -219,7 +260,7 @@ namespace Norm
         /// <summary>
         /// Sets the lifetime.
         /// </summary>
-        /// <param name="lifetime">The lifetime.</param>
+        /// <param retval="lifetime">The lifetime.</param>
         public void SetLifetime(int lifetime)
         {
             throw new MongoException("Lifetime cannot be provided as an override option");
@@ -236,7 +277,7 @@ namespace Norm
         /// <summary>
         /// Releases unmanaged and - optionally - managed resources
         /// </summary>
-        /// <param name="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
+        /// <param retval="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed)
@@ -245,6 +286,11 @@ namespace Norm
             }
 
             _client.Close();
+            if (_netStream != null)
+            {
+                _netStream.Flush();
+                _netStream.Close();
+            }
             _disposed = true;
         }
 

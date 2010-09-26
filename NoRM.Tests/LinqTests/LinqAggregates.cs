@@ -2,6 +2,8 @@
 using System.Linq;
 using Xunit;
 using Norm.Configuration;
+using Norm.Linq;
+using Norm.Tests.Helpers;
 
 namespace Norm.Tests
 {
@@ -25,8 +27,11 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 22 });
                 session.Add(new TestProduct { Name = "3", Price = 33 });
-                var result = session.Products.Count();
-                Assert.Equal(3, result);
+                var productQueryable = session.Products;
+
+                Assert.Equal(3, productQueryable.Count());
+
+                Assert.Equal(false, productQueryable.QueryStructure().IsComplex);
             }
         }
         [Fact]
@@ -37,8 +42,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 22 });
                 session.Add(new TestProduct { Name = "3", Price = 33 });
-                var result = session.Products.Where(x => x.Price > 20).Count();
+                var queryable = session.Products;
+                var result = queryable.Where(x => x.Price > 20).Count();
                 Assert.Equal(2, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
    
@@ -51,8 +58,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 40, _id = target });
                 session.Add(new TestProduct { Name = "2", Price = 22, _id = ObjectId.NewObjectId() });
                 session.Add(new TestProduct { Name = "3", Price = 33, _id = ObjectId.NewObjectId() });
-                var result = session.Products.Where(x => x._id == target).Count();
+                var queryable = session.Products;
+                var result = queryable.Where(x => x._id == target).Count();
                 Assert.Equal(1, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }        
         [Fact]
@@ -63,8 +72,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "dd", Price = 10 });
                 session.Add(new TestProduct { Name = "ss", Price = 20 });
                 session.Add(new TestProduct { Name = "asdasddds", Price = 30 });
-                var result = session.Products.Sum(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Sum(x => x.Price);
                 Assert.Equal(60, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
         [Fact]
@@ -75,8 +86,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-                var result = session.Products.Where(x => x.Price < 30).Sum(x => x.Price);
+                var queryable = session.Products;
+                var result =queryable.Where(x => x.Price < 30).Sum(x => x.Price);
                 Assert.Equal(30, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -92,8 +105,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-                var result = session.Products.Where(x => names.Contains(x.Name)).Sum(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Where(x => names.Contains(x.Name)).Sum(x => x.Price);
                 Assert.Equal(30, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -105,8 +120,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-                var result = session.Products.Average(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Average(x => x.Price);
                 Assert.Equal(20, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -118,8 +135,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-                var result = session.Products.Where(x => x.Price < 30).Average(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Where(x => x.Price < 30).Average(x => x.Price);
                 Assert.Equal(15, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -132,9 +151,10 @@ namespace Norm.Tests
                 {
                     session.Add(new TestProduct { Name = i.ToString(), Price = i + 1 });
                 }
-
-                var result = session.Products.Average(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Average(x => x.Price);
                 Assert.Equal(500.5, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -146,8 +166,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-                var result = session.Products.Min(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Min(x => x.Price);
                 Assert.Equal(10, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -159,8 +181,10 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-                var result = session.Products.Max(x => x.Price);
+                var queryable = session.Products;
+                var result = queryable.Max(x => x.Price);
                 Assert.Equal(30, result);
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
         [Fact]
@@ -171,8 +195,9 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-
-                Assert.True(session.Products.Any(x => x.Price == 10));
+                var queryable = session.Products;
+                Assert.True(queryable.Any(x => x.Price == 10));
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -184,8 +209,9 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-
-                Assert.True(session.Products.Where(x=>x.Price < 30).Any(x => x.Price == 10));
+                var queryable = session.Products;
+                Assert.True(queryable.Where(x => x.Price < 30).Any(x => x.Price == 10));
+                Assert.Equal(true, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -197,8 +223,9 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-
-                Assert.True(session.Products.Any());
+                var queryable = session.Products;
+                Assert.True(queryable.Any());
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 
@@ -210,8 +237,9 @@ namespace Norm.Tests
                 session.Add(new TestProduct { Name = "1", Price = 10 });
                 session.Add(new TestProduct { Name = "2", Price = 20 });
                 session.Add(new TestProduct { Name = "3", Price = 30 });
-
-                Assert.False(session.Products.Any(x => x.Price == 100));
+                var queryable = session.Products;
+                Assert.False(queryable.Any(x => x.Price == 100));
+                Assert.Equal(false, queryable.QueryStructure().IsComplex);
             }
         }
 

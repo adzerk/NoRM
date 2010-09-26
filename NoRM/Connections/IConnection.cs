@@ -9,6 +9,11 @@ namespace Norm
     public interface IConnection : IDisposable
     {
         /// <summary>
+        /// Get the write count required to be returned from the server when strict mode is enabled.
+        /// </summary>
+        int VerifyWriteCount { get; }
+
+        /// <summary>
         /// The connection string used to create this connection.
         /// </summary>
         string ConnectionString { get; }
@@ -45,12 +50,12 @@ namespace Norm
         bool StrictMode { get; }
 
         /// <summary>
-        /// Gets the user name.
+        /// Gets the user retval.
         /// </summary>
         string UserName { get; }
 
         /// <summary>
-        /// Gets the database name.
+        /// Gets the database retval.
         /// </summary>
         string Database { get; }
 
@@ -63,14 +68,14 @@ namespace Norm
         /// <summary>
         /// The digest.
         /// </summary>
-        /// <param name="nounce">The nounce.</param>
+        /// <param retval="nounce">The nounce.</param>
         /// <returns>The digest.</returns>
         string Digest(string nounce);
 
         /// <summary>
         /// Loads options.
         /// </summary>
-        /// <param name="options">The options.</param>
+        /// <param retval="options">The options.</param>
         void LoadOptions(string options);
 
         /// <summary>
@@ -81,9 +86,9 @@ namespace Norm
         /// <summary>
         /// Writes an object.
         /// </summary>
-        /// <param name="bytes">The bytes.</param>
-        /// <param name="start">The start.</param>
-        /// <param name="size">The size.</param>
+        /// <param retval="bytes">The bytes.</param>
+        /// <param retval="start">The start.</param>
+        /// <param retval="size">The size.</param>
         void Write(byte[] bytes, int start, int size);
     }
 }

@@ -1,6 +1,10 @@
-﻿using System;
+using System;
 ﻿using Norm.Commands.Qualifiers;
 using System.Text.RegularExpressions;
+using Norm.BSON;
+using Norm.Commands;
+using System.Collections;
+using System.Linq;
 
 namespace Norm
 {
@@ -12,7 +16,7 @@ namespace Norm
     /// This should remain in the Norm namespace so that it's available 
     /// automatically when someone is using a MongoCollection.
     /// </remarks>
-    public class Q
+    public static class Q
     {
         /// <summary>
         /// Construct an "equals" qualifier testing for Null.
@@ -35,10 +39,61 @@ namespace Norm
             return Q.NotEqual(new bool?());
         }
 
+        public static Expando And(this QualifierCommand baseCommand, params QualifierCommand[] additionalQualifiers)
+        {
+            var retval = new Expando();
+            retval[baseCommand.CommandName] = baseCommand.ValueForCommand;
+            foreach (var q in additionalQualifiers)
+            {
+                retval[q.CommandName] = q.ValueForCommand;
+            }
+            return retval;
+        }
+
+        /// <summary>
+        /// Produces an "$or" qualifier where each of the groups is a set of criteria.
+        /// </summary>
+        /// <param name="orGroups"></param>
+        /// <returns></returns>
+        public static OrQualifier Or(params object[] orGroups)
+        {
+            return new OrQualifier(orGroups);
+        }
+
+      
+        /// <summary>
+        /// Produces an "$or" qualifier where each of the groups is a set of criteria.
+        /// </summary>
+        /// <param name="orGroups"></param>
+        /// <returns></returns>
+        public static OrQualifier Or(IEnumerable orGroups)
+        {
+            return Or(orGroups.OfType<Object>().ToArray());
+        }
+
+        /// <summary>
+        /// Produces a single element $slice at the specific index.
+        /// </summary>
+        /// <param name="index">The single index that the slice will be used with.</param>
+        public static SliceQualifier Slice(int index)
+        {
+            return new SliceQualifier(index);
+        }
+
+        /// <summary>
+        /// Produces a $slice qualifier at starting at the left index and going to the right index.
+        /// </summary>
+        /// <param name="left">The first index for the slice.</param>
+        /// <param name="right">The second index for the slice.</param>
+        public static SliceQualifier Slice(int left, int right)
+        {
+            return new SliceQualifier(left, right);
+        }
+
         /// <summary>
         /// construct a $where qualifier
         /// </summary>
-        /// <param name="expression">The expression.</param>
+        /// <param retval="expression">The expression.</param>
         /// <returns></returns>
         public static WhereQualifier Where(string expression)
         {
@@ -48,7 +103,7 @@ namespace Norm
         /// <summary>
         /// Builds a $lt qualifier for the search.
         /// </summary>
-        /// <param name="value">The value.</param>
+        /// <param retval="value">The value.</param>
         /// <returns></returns>
         public static LessThanQualifier LessThan(double value)
         {
@@ -56,9 +111,19 @@ namespace Norm
         }
 
         /// <summary>
+        /// Builds a $lt qualifier for the search.
+        /// </summary>
+        /// <param retval="value">The value.</param>
+        /// <returns></returns>
+        public static LessThanQualifier LessThan(object value)
+        {
+            return new LessThanQualifier(value);
+        }
+
+        /// <summary>
         /// Builds a $lte qualifier for the search.
         /// </summary>
-        /// <param name="value">The value.</param>
+        /// <param retval="value">The value.</param>
         /// <returns></returns>
         public static LessOrEqualQualifier LessOrEqual(double value)
         {
@@ -66,9 +131,19 @@ namespace Norm
         }
 
         /// <summary>
+        /// Builds a $lte qualifier for the search.
+        /// </summary>
+        /// <param retval="value">The value.</param>
+        /// <returns></returns>
+        public static LessOrEqualQualifier LessOrEqual(object value)
+        {
+            return new LessOrEqualQualifier(value);
+        }
+
+        /// <summary>
         /// Builds a $gte qualifier for the search.
         /// </summary>
-        /// <param name="value">The value.</param>
+        /// <param retval="value">The value.</param>
         /// <returns></returns>
         public static GreaterOrEqualQualifier GreaterOrEqual(double value)
         {
@@ -76,9 +151,19 @@ namespace Norm
         }
 
         /// <summary>
+        /// Builds a $gte qualifier for the search.
+        /// </summary>
+        /// <param retval="value">The value.</param>
+        /// <returns></returns>
+        public static GreaterOrEqualQualifier GreaterOrEqual(object value)
+        {
+            return new GreaterOrEqualQualifier(value);
+        }
+
+        /// <summary>
         /// Builds a $gt qualifier for the search.
         /// </summary>
-        /// <param name="value">The value.</param>
+        /// <param retval="value">The value.</param>
         /// <returns></returns>
         public static GreaterThanQualifier GreaterThan(double value)
         {
@@ -88,9 +173,9 @@ namespace Norm
         /// <summary>
         /// Builds a $gt qualifier for the search.
         /// </summary>
-        /// <param name="value">The value.</param>
+        /// <param retval="value">The value.</param>
         /// <returns></returns>
-        public static GreaterThanQualifier GreaterThan(DateTime value)
+        public static GreaterThanQualifier GreaterThan(object value)
         {
             return new GreaterThanQualifier(value);
         }
@@ -98,8 +183,8 @@ namespace Norm
         /// <summary>
         /// Builds an $all statement
         /// </summary>
-        /// <typeparam name="T">Type to qualify</typeparam>
-        /// <param name="all">All.</param>
+        /// <typeparam retval="T">Type to qualify</typeparam>
+        /// <param retval="all">All.</param>
         /// <returns></returns>
         public static AllQualifier<T> All<T>(params T[] all)
         {
@@ -109,8 +194,8 @@ namespace Norm
         /// <summary>
         /// Builds an $in qualifier statement.
         /// </summary>
-        /// <typeparam name="T">Type to qualify</typeparam>
-        /// <param name="inSet">The in set.</param>
+        /// <typeparam retval="T">Type to qualify</typeparam>
+        /// <param retval="inSet">The in set.</param>
         /// <returns></returns>
         public static InQualifier<T> In<T>(params T[] inSet)
         {
@@ -120,8 +205,8 @@ namespace Norm
         /// <summary>
         /// Builds a $ne qualifier against the value.
         /// </summary>
-        /// <typeparam name="T">Type to compare for equality</typeparam>
-        /// <param name="test">The test.</param>
+        /// <typeparam retval="T">Type to compare for equality</typeparam>
+        /// <param retval="test">The test.</param>
         /// <returns></returns>
         public static NotEqualQualifier NotEqual<T>(T test)
         {
@@ -132,8 +217,8 @@ namespace Norm
         /// Passes the value straight back to you, new { Property = "value"} will
         /// work just fine as a qualifier. Here for the sake of consistency.
         /// </summary>
-        /// <typeparam name="T">Type to compare for equality</typeparam>
-        /// <param name="test">The test.</param>
+        /// <typeparam retval="T">Type to compare for equality</typeparam>
+        /// <param retval="test">The test.</param>
         /// <returns></returns>
         public static T Equals<T>(T test)
         {
@@ -143,7 +228,7 @@ namespace Norm
         /// <summary>
         /// Builds a $size qualifier.
         /// </summary>
-        /// <param name="size">The size.</param>
+        /// <param retval="size">The size.</param>
         /// <returns></returns>
         public static SizeQualifier Size(double size)
         {
@@ -153,8 +238,8 @@ namespace Norm
         /// <summary>
         /// Builds an $nin qualifier statement.
         /// </summary>
-        /// <typeparam name="T">Type to qualify</typeparam>
-        /// <param name="inSet">The in set.</param>
+        /// <typeparam retval="T">Type to qualify</typeparam>
+        /// <param retval="inSet">The in set.</param>
         /// <returns></returns>
         public static NotInQualifier<T> NotIn<T>(params T[] inSet)
         {
@@ -164,8 +249,8 @@ namespace Norm
         /// <summary>
         /// constructs a $elemMatch qualifier statement.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="matchDoc"></param>
+        /// <typeparam retval="T"></typeparam>
+        /// <param retval="matchDoc"></param>
         /// <returns></returns>
         public static ElementMatch<T> ElementMatch<T>(T matchDoc)
         {
@@ -173,9 +258,9 @@ namespace Norm
         }
 
         /// <summary>
-        /// returns a constructed regex to be used to match the specified property name in the DB.
+        /// returns a constructed regex to be used to match the specified property retval in the DB.
         /// </summary>
-        /// <param name="pattern"></param>
+        /// <param retval="pattern"></param>
         /// <returns></returns>
         public static Regex Matches(String pattern)
         {
@@ -185,11 +270,11 @@ namespace Norm
         /// <summary>
         /// Builds an $exists qualifier for the search.
         /// </summary>
-        /// <param name="value">if set to <c>true</c> [value].</param>
+        /// <param retval="value">if set to <c>true</c> [value].</param>
         /// <returns></returns>
-        public static ExistsQuallifier Exists(bool value)
+        public static ExistsQualifier Exists(bool value)
         {
-            return new ExistsQuallifier(value);
+            return new ExistsQualifier(value);
         }
     }
 }

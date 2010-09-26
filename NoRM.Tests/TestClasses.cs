@@ -11,6 +11,8 @@ using Norm.BSON.DbTypes;
 using Norm.Collections;
 using System.ComponentModel;
 using Norm.BSON;
+using System.Collections;
+using System.Globalization;
 
 namespace Norm.Tests
 {
@@ -34,6 +36,11 @@ namespace Norm.Tests
     {
         public ObjectId Id { get; set; }
         public int Value { get; set; }
+    }
+
+    public class GenericSuperClass<T>
+    {
+
     }
 
     public class TestClass
@@ -96,36 +103,34 @@ namespace Norm.Tests
 
     internal class Session : IDisposable
     {
-        private readonly MongoQueryProvider _provider;
+        
+        private readonly IMongo _provider;
 
         public Session()
         {
-            _provider = MongoQueryProvider.Create("mongodb://127.0.0.1/NormTests?strict=false");
+            _provider = Mongo.Create("mongodb://127.0.0.1/NormTests?strict=false");
         }
 
-        public MongoQueryProvider Provider
-        {
-            get { return _provider; }
-        }
+        public IMongoDatabase DB { get { return this._provider.Database; } }
 
         public IQueryable<TestProduct> Products
         {
-            get { return new MongoQuery<TestProduct>(_provider); }
+            get { return _provider.GetCollection<TestProduct>().AsQueryable(); }
         }
         public IQueryable<Thread> Threads
         {
-            get { return new MongoQuery<Thread>(_provider); }
+            get { return _provider.GetCollection<Thread>().AsQueryable(); }
         }
         public IQueryable<Post> Posts
         {
-            get { return new MongoQuery<Post>(_provider); }
+            get { return _provider.GetCollection<Post>().AsQueryable(); }
         }
 
         #region IDisposable Members
 
         public void Dispose()
         {
-            _provider.Server.Dispose();
+            _provider.Dispose();
         }
 
         #endregion
@@ -133,15 +138,15 @@ namespace Norm.Tests
         public T MapReduce<T>(string map, string reduce)
         {
             T result = default(T);
-            MapReduce mr = _provider.Server.CreateMapReduce();
+            MapReduce mr = _provider.Database.CreateMapReduce();
 
             MapReduceResponse response =
-                mr.Execute(new MapReduceOptions(MongoConfiguration.GetCollectionName(typeof (T)))
+                mr.Execute(new MapReduceOptions(MongoConfiguration.GetCollectionName(typeof(T)))
                                {
                                    Map = map,
                                    Reduce = reduce
                                });
-            MongoCollection<MapReduceResult<T>> coll = response.GetCollection<MapReduceResult<T>>();
+            IMongoCollection<MapReduceResult<T>> coll = response.GetCollection<MapReduceResult<T>>();
             MapReduceResult<T> r = coll.Find().FirstOrDefault();
             result = r.Value;
 
@@ -150,23 +155,24 @@ namespace Norm.Tests
 
         public void Add<T>(T item) where T : class, new()
         {
-            _provider.DB.GetCollection<T>().Insert(item);
+            _provider.Database.GetCollection<T>().Insert(item);
         }
 
         public void Update<T>(T item) where T : class, new()
         {
-            _provider.DB.GetCollection<T>().UpdateOne(item, item);
+            _provider.Database.GetCollection<T>().Save(item);
         }
 
         public void Drop<T>()
         {
-            _provider.DB.DropCollection(MongoConfiguration.GetCollectionName(typeof(T)));
+            _provider.Database.DropCollection(MongoConfiguration.GetCollectionName(typeof(T)));
         }
 
         public void CreateCappedCollection(string name)
         {
-            _provider.DB.CreateCollection(new CreateCollectionOptions(name));
+            _provider.Database.CreateCollection(new CreateCollectionOptions(name));
         }
+
     }
 
     internal class Post
@@ -204,6 +210,15 @@ namespace Norm.Tests
     internal class Comment
     {
         public string Text { get; set; }
+        public string Name { get; set; }
+        public bool IsOld { get; set; }
+        public IList<Tag> CommentTags { get; set; }
+        public IList<string> CommentTagsSimple { get; set; }
+    }
+
+    internal class Tag
+    {
+        public string TagName { get; set; }
     }
 
     internal class CheeseClubContact
@@ -216,6 +231,13 @@ namespace Norm.Tests
         {
             Id = ObjectId.NewObjectId();
         }
+    }
+
+    internal class CheeseClubContactWithNullableIntId
+    {
+        public int? Id { get; set; }
+        public string Name { get; set; }
+        public string FavoriteCheese { get; set; }
     }
 
     internal class ProductReference
@@ -232,14 +254,14 @@ namespace Norm.Tests
 
     internal class User3
     {
-        public string Id{ get; set; }
-        public string EmailAddress{ get; set; }
+        public string Id { get; set; }
+        public string EmailAddress { get; set; }
     }
 
     internal class Role
     {
-        public string Id{ get; set; }
-        public List<DbReference<User3,string>> Users{ get; set; }
+        public string Id { get; set; }
+        public List<DbReference<User3, string>> Users { get; set; }
     }
 
     internal class Person
@@ -250,6 +272,7 @@ namespace Norm.Tests
         public DateTime LastContact { get; set; }
         public List<String> Relatives { get; set; }
         public DateTime Birthday { get; set; }
+        public int Age { get; set; }
         public Person()
         {
             Id = ObjectId.NewObjectId();
@@ -297,7 +320,7 @@ namespace Norm.Tests
             }
         }
 
-    } 
+    }
 
     internal class Supplier
     {
@@ -310,7 +333,8 @@ namespace Norm.Tests
         public string Name { get; set; }
         public DateTime CreatedOn { get; set; }
         public Address Address { get; set; }
-    }   
+        public int RefNum { get; set; }
+    }
 
     internal class InventoryChange
     {
@@ -338,18 +362,23 @@ namespace Norm.Tests
         public double Price { get; set; }
         public Supplier Supplier { get; set; }
         public DateTime Available { get; set; }
+        public int Quantity { get; set; }
         public bool IsAvailable { get; set; }
         public bool IsStillAvailable { get; set; }
-    }    
-
-    internal class ProductSummary
+    }
+    
+    internal class TestProductSummary
     {
-        public ObjectId Id { get; private set; }
-        public string Name{ get; set;}
+        public ObjectId _id { get; set; }
+        public string Name { get; set; }
         public double Price { get; set; }
     }
 
-   
+    internal class TestIntGeneration
+    {
+        public int? _id { get; set; }
+        public string Name { get; set; }
+    }
 
     public class FakeObject
     {
@@ -475,7 +504,7 @@ namespace Norm.Tests
         [DefaultValue("Test")]
         public string Message { get; set; }
 
-        [DefaultValue(typeof(DateTime),"00:00:00.0000000, January 1, 0001")]
+        [DefaultValue(typeof(DateTime), "00:00:00.0000000, January 1, 0001")]
         public DateTime MagicDate { get; set; }
     }
 
@@ -497,7 +526,7 @@ namespace Norm.Tests
         public Flags32? Flags32 { get; set; }
         public Flags64? Flags64 { get; set; }
         internal IEnumerable<Person> AnIEnumerable { get; set; }
-        
+
         [MongoIgnore]
         public int IgnoredProperty { get; set; }
     }
@@ -506,6 +535,55 @@ namespace Norm.Tests
     {
         public bool IsOver9000 { get; set; }
     }
+
+    public class CultureInfoDTO
+    {
+        public CultureInfo Culture { get; set; }
+    }
+
+    public class NonSerializableClass
+    {
+        public NonSerializableValueObject Value { get; set; }
+        public string Text { get; set; }
+    }
+
+    public class NonSerializableValueObject
+    {
+        // Stuff a few properties in here that Norm normally cannot handle
+        private ArgumentException ex { get; set; }
+        private NonSerializableValueObject MakeNormCrashReference { get; set; }
+
+        public string Number { get; private set; }
+
+        public NonSerializableValueObject(string number)
+        {
+            Number = number;
+            MakeNormCrashReference = this;
+        }
+    }
+
+    public class NonSerializableValueObjectTypeConverter : IBsonTypeConverter
+    {
+        #region IBsonTypeConverter Members
+
+        public Type SerializedType
+        {
+            get { return typeof(string); }
+        }
+
+        public object ConvertToBson(object data)
+        {
+            return ((NonSerializableValueObject)data).Number;
+        }
+
+        public object ConvertFromBson(object data)
+        {
+            return new NonSerializableValueObject((string)data);
+        }
+
+        #endregion
+    }
+
 
     [MongoDiscriminated]
     public class SuperClassObject
@@ -579,6 +657,37 @@ namespace Norm.Tests
         public Guid Id { get; protected set; }
     }
 
+    internal class InterfacePropertyContainingClass
+    {
+        public InterfacePropertyContainingClass()
+        {
+            Id = Guid.NewGuid();
+            InterfaceProperty = new NotDiscriminatedClass();
+        }
+
+        [MongoIdentifier]
+        public Guid Id { get; set; }
+        public INotDiscriminated InterfaceProperty { get; set; }
+    }
+
+    internal interface INotDiscriminated
+    {
+        string Something { get; set; }
+    }
+
+    internal class NotDiscriminatedClass : INotDiscriminated
+    {
+        public string Something { get; set; }
+    }
+
+    public class DiscriminationMap : MongoConfigurationMap
+    {
+        public DiscriminationMap()
+        {
+            For<INotDiscriminated>(config => config.UseAsDiscriminator());
+        }
+    }
+
     internal interface IDTOWithNonDefaultId
     {
         [MongoIdentifier]
@@ -594,50 +703,42 @@ namespace Norm.Tests
 
         public Guid MyId { get; protected set; }
     }
-    
+
     public class PrivateConstructor
     {
-        public string Name{ get; set;}
-        private PrivateConstructor(){}
+        public string Name { get; set; }
+        private PrivateConstructor() { }
 
         public static PrivateConstructor Create(string name)
         {
-            return new PrivateConstructor {Name = name};
+            return new PrivateConstructor { Name = name };
         }
     }
-    
+
     public class Forum
     {
-        public ObjectId Id{ get; set;}
+        public ObjectId Id { get; set; }
     }
 
     public class Thread
     {
-        public ObjectId ForumId{ get; set; }
+        public ObjectId ForumId { get; set; }
     }
 
-    internal class Shoppers : MongoQuery<Shopper>, IDisposable
+    internal class Shoppers : IQueryable<Shopper>, IDisposable
     {
-        private readonly MongoQueryProvider _provider;
+        private readonly IMongo _provider;
 
-        public Shoppers(MongoQueryProvider provider)
-            : base(provider)
+        public Shoppers(IMongo conn)
         {
-            _provider = provider;
-        }
-
-        public MongoQueryProvider Provider
-        {
-            get
-            {
-                return _provider;
-            }
+            _provider = conn;
+            this._queryable = conn.GetCollection<Shopper>().AsQueryable();
         }
 
         public T MapReduce<T>(string map, string reduce)
         {
             var result = default(T);
-            var mr = _provider.Server.CreateMapReduce();
+            var mr = _provider.Database.CreateMapReduce();
 
             var response = mr.Execute(new MapReduceOptions(typeof(T).Name) { Map = map, Reduce = reduce });
             var coll = response.GetCollection<MapReduceResult<T>>();
@@ -649,27 +750,57 @@ namespace Norm.Tests
 
         public void Add<T>(T item) where T : class, new()
         {
-            _provider.DB.GetCollection<T>().Insert(item);
+            _provider.Database.GetCollection<T>().Insert(item);
         }
 
         public void Update<T>(T item) where T : class, new()
         {
-            _provider.DB.GetCollection<T>().UpdateOne(item, item);
+            _provider.Database.GetCollection<T>().UpdateOne(item, item);
         }
 
         public void Drop<T>()
         {
-            _provider.DB.DropCollection(MongoConfiguration.GetCollectionName(typeof(T)));
+            try
+            {
+                _provider.Database.DropCollection(MongoConfiguration.GetCollectionName(typeof (T)));
+            }
+            catch (MongoException)
+            {
+            }
         }
-
-        #region IDisposable Members
 
         public void Dispose()
         {
-            _provider.Server.Dispose();
+            _provider.Dispose();
         }
 
-        #endregion
+        private IQueryable<Shopper> _queryable;
+
+        public IEnumerator<Shopper> GetEnumerator()
+        {
+            return this._queryable.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return this.GetEnumerator();
+        }
+
+        public Type ElementType
+        {
+            get { return this._queryable.ElementType; }
+        }
+
+        public System.Linq.Expressions.Expression Expression
+        {
+            get { return this._queryable.Expression; }
+        }
+
+        public IQueryProvider Provider
+        {
+            get { return this._queryable.Provider; }
+        }
+
     }
 
     internal class Shopper

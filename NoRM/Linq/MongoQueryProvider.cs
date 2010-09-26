@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -13,47 +13,29 @@ namespace Norm.Linq
     /// <summary>
     /// The mongo query provider.
     /// </summary>
-    public class MongoQueryProvider : IQueryProvider, IDisposable
+    internal class MongoQueryProvider : IQueryProvider, IMongoQueryResults
     {
-        private readonly Mongo _server;
+        private QueryTranslationResults _results;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MongoQueryProvider"/> class.
-        /// </summary>
-        /// <param name="server">
-        /// The server.
-        /// </param>
-        public MongoQueryProvider(Mongo server)
+        internal static MongoQueryProvider Create(IMongoDatabase db, String collectionName)
         {
-            _server = server;
-        }
-
-        public static MongoQueryProvider Create(String connectionString)
-        {
-            return new MongoQueryProvider(Mongo.Create(connectionString));
+            return new MongoQueryProvider() { DB = db, CollectionName = collectionName };
         }
 
         /// <summary>
         /// Gets the DB.
         /// </summary>
-        public MongoDatabase DB
+        public IMongoDatabase DB
         {
-            get { return _server.Database; }
-        }
-
-        /// <summary>
-        /// Gets the server.
-        /// </summary>
-        public Mongo Server
-        {
-            get { return _server; }
+            get;
+            private set;
         }
 
         /// <summary>
         /// The i query provider. create query.
         /// </summary>
-        /// <typeparam name="S">Type of query to create</typeparam>
-        /// <param name="expression">The expression.</param>
+        /// <typeparam retval="S">Type of query to create</typeparam>
+        /// <param retval="expression">The expression.</param>
         /// <returns></returns>
         IQueryable<S> IQueryProvider.CreateQuery<S>(Expression expression)
         {
@@ -61,10 +43,12 @@ namespace Norm.Linq
             return query;
         }
 
+        public String CollectionName { get; set; }
+
         /// <summary>
         /// The i query provider. create query.
         /// </summary>
-        /// <param name="expression">The expression.</param>
+        /// <param retval="expression">The expression.</param>
         /// <returns>
         /// An <see cref="T:System.Linq.IQueryable"/> that can evaluate the query represented by the specified expression tree.
         /// </returns>
@@ -86,8 +70,8 @@ namespace Norm.Linq
         /// <summary>
         /// The i query provider. execute.
         /// </summary>
-        /// <typeparam name="S">Type to execute</typeparam>
-        /// <param name="expression">The expression.</param>
+        /// <typeparam retval="S">Type to execute</typeparam>
+        /// <param retval="expression">The expression.</param>
         /// <returns>Resulting object</returns>
         S IQueryProvider.Execute<S>(Expression expression)
         {
@@ -98,7 +82,7 @@ namespace Norm.Linq
         /// <summary>
         /// The i query provider. execute.
         /// </summary>
-        /// <param name="expression">The expression.</param>
+        /// <param retval="expression">The expression.</param>
         /// <returns>The i query provider. execute.</returns>
         object IQueryProvider.Execute(Expression expression)
         {
@@ -106,93 +90,39 @@ namespace Norm.Linq
         }
 
         /// <summary>
+        /// Executes the Linq expression
         /// </summary>
-        /// <param name="expression">An expression tree that represents a LINQ query.</param>
+        /// <param retval="expression">An expression tree that represents a LINQ query.</param>
         /// <returns>The execute.</returns>
         public object ExecuteQuery<T>(Expression expression)
         {
             expression = PartialEvaluator.Eval(expression, this.CanBeEvaluatedLocally);
 
             var translator = new MongoQueryTranslator();
-            var qry = translator.Translate(expression);
-            var fly = translator.FlyWeight;
+            translator.CollectionName = this.CollectionName;
+            var results = translator.Translate(expression);
+            _results = results;
+            var executor = new MongoQueryExecutor(this.DB, results);
 
-            // This is the actual Query mechanism...            
-            var collection = new MongoCollection<T>(translator.CollectionName, DB, DB.CurrentConnection);
-
-            string map = "", reduce = "", finalize = "";
-            if (!string.IsNullOrEmpty(translator.AggregatePropName))
+            object retval = null;
+            if (results.Select != null)
             {
-                map = "function(){emit(0, {val: this." + translator.AggregatePropName + ",tSize:1} )};";
-                if (!string.IsNullOrEmpty(qry))
-                {
-                    map = "function(){if (" + qry + ") {emit(0, {val: this." + translator.AggregatePropName + ",tSize:1} )};}";
-                }
-
-                finalize = "function(key, res){ return res.val; }";
+                MethodInfo mi = executor.GetType().GetMethod("Execute");
+                var method = mi.MakeGenericMethod(results.OriginalSelectType);
+                retval = method.Invoke(executor, new object[]{});
             }
-
-            switch (translator.MethodCall)
+            else
             {
-                case "SingleOrDefault":
-                case "FirstOrDefault":
-                case "Single":
-                case "First":
-                    translator.Take = 1;
-                    break;
+                retval = executor.Execute<T>();
             }
-
-            object result;
-            switch (translator.MethodCall)
-            {
-                case "Any":
-                    result = collection.Count(fly) > 0;
-                    break;
-                case "Count":
-                    result = collection.Count(fly);
-                    break;
-                case "Sum":
-                    reduce = "function(key, values){var sum = 0; for(var i = 0; i < values.length; i++){ sum+=values[i].val;} return {val:sum};}";
-                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
-                    break;
-                case "Average":
-                    reduce = "function(key, values){var sum = 0, tot = 0; for(var i = 0; i < values.length; i++){sum += values[i].val; tot += values[i].tSize; } return {val:sum,tSize:tot};}";
-                    finalize = "function(key, res){ return res.val / res.tSize; }";
-                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
-                    break;
-                case "Min":
-                    reduce = "function(key, values){var least = 0; for(var i = 0; i < values.length; i++){if(i==0 || least > values[i].val){least=values[i].val;}} return {val:least};}";
-                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
-                    break;
-                case "Max":
-                    reduce = "function(key, values){var least = 0; for(var i = 0; i < values.length; i++){if(i==0 || least < values[i].val){least=values[i].val;}} return {val:least};}";
-                    result = ExecuteMR<double>(translator.TypeName, map, reduce, finalize);
-                    break;
-                default:
-                    if (translator.SortFly.AllProperties().Count() > 0)
-                    {
-                        translator.SortFly.ReverseKitchen();
-                        result = collection.Find(fly, translator.SortFly, translator.Take, translator.Skip, collection.FullyQualifiedName);
-                    }
-                    else
-                    {
-                        result = collection.Find(fly, translator.Take, translator.Skip);
-                    }
-
-                    switch (translator.MethodCall)
-                    {
-                        case "SingleOrDefault": result = ((IEnumerable<T>)result).SingleOrDefault(); break;
-                        case "FirstOrDefault": result = ((IEnumerable<T>)result).FirstOrDefault(); break;
-                        case "Single": result = ((IEnumerable<T>)result).Single(); break;
-                        case "First": result = ((IEnumerable<T>)result).First(); break;
-                    }
-
-                    break;
-            }
-
-            return result;
+            return retval;
         }
 
+        /// <summary>
+        /// Executes the Linq expression
+        /// </summary>
+        /// <param retval="expression">An expression tree that represents a LINQ query.</param>
+        /// <returns>The execute.</returns>
         public object Execute(Expression expression)
         {
             var elementType = LinqTypeHelper.GetElementType(expression.Type);
@@ -233,29 +163,10 @@ namespace Norm.Linq
                    expression.NodeType != ExpressionType.Lambda;
         }
 
-        /// <summary>
-        /// Actual execution of the MapReduce stuff (thanks Karl!)
-        /// </summary>
-        /// <typeparam name="T">Type to map and reduce</typeparam>
-        /// <param name="typeName">Name of the type.</param>
-        /// <param name="map">The map.</param>
-        /// <param name="reduce">The reduce.</param>
-        /// <param name="finalize">The finalize.</param>
-        /// <returns></returns>
-        private T ExecuteMR<T>(string typeName, string map, string reduce, string finalize)
+        QueryTranslationResults IMongoQueryResults.TranslationResults
         {
-            var mr = Server.CreateMapReduce();
-            var response = mr.Execute(new MapReduceOptions(typeName) {Map = map, Reduce = reduce, Finalize = finalize});
-            var coll = response.GetCollection<MapReduceResult<T>>();
-            var r = coll.Find().FirstOrDefault();
-            T result = r.Value;
-            
-            return result;
+            get { return _results; }
         }
 
-        public void Dispose()
-        {
-            _server.Dispose();
-        }
     }
 }

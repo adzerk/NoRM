@@ -8,13 +8,16 @@ namespace Norm
     internal static class ConnectionProviderFactory
     {
         private static readonly object _lock = new object();
-        private static volatile IDictionary<string, ConnectionStringBuilder> _cachedBuilders = new Dictionary<string, ConnectionStringBuilder>();
-        private static volatile IDictionary<string, IConnectionProvider> _providers = new Dictionary<string, IConnectionProvider>();
+        private static volatile IDictionary<string, ConnectionStringBuilder> _cachedBuilders = 
+            new Dictionary<string, ConnectionStringBuilder>();
+
+        private static volatile IDictionary<string, IConnectionProvider> _providers = 
+            new Dictionary<string, IConnectionProvider>();
 
         /// <summary>
         /// Creates a connection provider.
         /// </summary>
-        /// <param name="connectionString">The connection string.</param>
+        /// <param retval="connectionString">The connection string.</param>
         /// <returns></returns>
         public static IConnectionProvider Create(string connectionString)
         {
@@ -50,7 +53,7 @@ namespace Norm
         /// <summary>
         /// The create new provider.
         /// </summary>
-        /// <param name="builder">The builder.</param>
+        /// <param retval="builder">The builder.</param>
         /// <returns></returns>
         private static IConnectionProvider CreateNewProvider(ConnectionStringBuilder builder)
         {

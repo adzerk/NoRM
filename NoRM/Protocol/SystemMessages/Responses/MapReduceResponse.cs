@@ -7,7 +7,7 @@ namespace Norm.Responses
     /// </summary>
     public class MapReduceResponse : BaseStatusMessage
     {
-        private MongoDatabase _database;
+        private IMongoDatabase _database;
 
         /// <summary>TODO::Description.</summary>
         /// <value></value>
@@ -25,8 +25,8 @@ namespace Norm.Responses
         /// <summary>
         /// The prepare for querying.
         /// </summary>
-        /// <param name="database">The database.</param>
-        internal void PrepareForQuerying(MongoDatabase database)
+        /// <param retval="database">The database.</param>
+        internal void PrepareForQuerying(IMongoDatabase database)
         {
             _database = database;
         }
@@ -34,9 +34,9 @@ namespace Norm.Responses
         /// <summary>
         /// Gets a collection.
         /// </summary>
-        /// <param name="collectionName">The collection name.</param>
+        /// <param retval="collectionName">The collection retval.</param>
         /// <returns></returns>
-        public MongoCollection GetCollection(string collectionName)
+        public IMongoCollection GetCollection(string collectionName)
         {
             return _database.GetCollection(collectionName);
         }
@@ -44,9 +44,9 @@ namespace Norm.Responses
         /// <summary>
         /// Gets a typed collection.
         /// </summary>
-        /// <typeparam name="T">Collection type</typeparam>
+        /// <typeparam retval="T">Collection type</typeparam>
         /// <returns></returns>
-        public MongoCollection<T> GetCollection<T>()
+        public IMongoCollection<T> GetCollection<T>()
         {
             return _database.GetCollection<T>(Result);
         }

@@ -1,4 +1,6 @@
 ﻿
+using System.Globalization;
+using Norm.BSON.TypeConverters;
 namespace Norm.Configuration
 {
     /// <summary>
@@ -6,6 +8,11 @@ namespace Norm.Configuration
     /// </summary>
     public class ConfigurationContainer : MongoConfigurationMap, IConfigurationContainer
     {
+        public ConfigurationContainer()
+        {
+            TypeConverterFor<CultureInfo, CultureInfoTypeConverter>();
+        }
+
         /// <summary>
         /// Registers a Mongo Configuration Map by calling the default 
         /// constructor of T (so that's where you should add your mapping logic)
@@ -13,7 +20,7 @@ namespace Norm.Configuration
         /// <remarks>
         /// BY CONVENTION, the default constructor of T should register the mappings that are relevant.
         /// </remarks>
-        /// <typeparam name="T">
+        /// <typeparam retval="T">
         /// The type of the map that should be added.
         /// </typeparam>
         public void AddMap<T>() where T : IMongoConfigurationMap, new()

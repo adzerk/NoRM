@@ -11,14 +11,10 @@ namespace Norm.Commands.Qualifiers
         /// <summary>
         /// Initializes a new instance of the <see cref="GreaterThanQualifier"/> class.
         /// </summary>
-        /// <param name="value">The value.</param>
-        internal GreaterThanQualifier(double value) : base("$gt", value)
+        /// <param retval="value">The value.</param>
+        internal GreaterThanQualifier(object value) : base("$gt", value)
         {
         }
 
-        internal GreaterThanQualifier(DateTime value)
-            : base("$gt", value)
-        {
-        }
     }
 }
