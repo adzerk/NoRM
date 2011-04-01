@@ -83,10 +83,10 @@
     <Compile Include="BSON\Command.cs" />
     <Compile Include="BSON\DbTypes\GridFile.cs" />
     <Compile Include="BSON\DbTypes\ObjectId.cs" />
-    <Compile Include="BSON\DbTypes\DbReference.cs" />
+    <Compile Include="BSON\DbTypes\DBReference.cs" />
     <Compile Include="BSON\DbTypes\ObjectIdTypeConverter.cs" />
     <Compile Include="BSON\DbTypes\ScopedCode.cs" />
-    <Compile Include="BSON\BsonSerializer.cs" />
+    <Compile Include="BSON\BSONSerializer.cs" />
     <Compile Include="BSON\BSONTypes.cs" />
     <Compile Include="BSON\ExpandoProperty.cs" />
     <Compile Include="BSON\IBsonTypeConverter.cs" />
